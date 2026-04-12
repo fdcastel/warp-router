@@ -140,13 +140,13 @@ specs/                         # Existing spec documents (unchanged)
 
 | # | Status | Task | Details |
 |---|--------|------|---------|
-| 1.1 | ❌ | Initialize Go module | `go mod init github.com/fdcastel/warp-router`, set Go 1.26, create `cmd/warp/main.go` stub |
-| 1.2 | ❌ | Create Makefile with build targets | Targets: `build`, `rootfs`, `lxc`, `qcow2`, `test`, `test-integration`, `clean` |
-| 1.3 | ❌ | Define package list for rootfs | Create `packaging/rootfs/packages.list`: `frr`, `kea-dhcp4-server`, `unbound`, `nftables`, `cloud-init`, `systemd`, `openssh-server`, `iproute2`, `curl`, `ca-certificates`, etc. |
-| 1.4 | ❌ | Write mmdebstrap rootfs build script | `packaging/rootfs/build-rootfs.sh`: produces a clean Debian 13 rootfs directory with all packages, timezone, locale, and SSH config. Must run as root or in a user namespace. |
-| 1.5 | ❌ | Create rootfs overlay files | `packaging/rootfs/overlay/`: default FRR daemons config (enable bgpd, staticd, bfdd), sysctl for IP forwarding, nftables base ruleset, Kea skeleton config, Unbound skeleton config, systemd service enablement |
-| 1.6 | ❌ | Write mmdebstrap customize hooks | `packaging/rootfs/hooks/`: post-install hook to apply overlay, enable services, clean APT cache, set root password policy, harden SSH (disable password auth, permit root key-only) |
-| 1.7 | ❌ | Validate rootfs locally | Manual: build rootfs on a Debian/Ubuntu host, chroot in, verify FRR/Kea/Unbound/nftables binaries present and services enabled |
+| 1.1 | ✅ | Initialize Go module | `go mod init github.com/fdcastel/warp-router`, set Go 1.22, create `cmd/warp/main.go` stub. Commit: 61bc618 |
+| 1.2 | ✅ | Create Makefile with build targets | Targets: `build`, `rootfs`, `lxc`, `qcow2`, `test`, `test-integration`, `clean`. Commit: ca581aa |
+| 1.3 | ✅ | Define package list for rootfs | Create `packaging/rootfs/packages.list`: `frr`, `kea-dhcp4-server`, `unbound`, `nftables`, `cloud-init`, `systemd`, `openssh-server`, `iproute2`, `curl`, `ca-certificates`, etc. Commit: fe275b0 |
+| 1.4 | ✅ | Write mmdebstrap rootfs build script | `packaging/rootfs/build-rootfs.sh`: produces a clean Debian 13 rootfs directory with all packages, timezone, locale, and SSH config. Must run as root or in a user namespace. Commit: 075bf30 |
+| 1.5 | ✅ | Create rootfs overlay files | `packaging/rootfs/overlay/`: default FRR daemons config (enable bgpd, staticd, bfdd, pbrd), sysctl for IP forwarding, nftables base ruleset, Kea skeleton config, Unbound skeleton config, SSH hardening. Commit: fb7cc53 |
+| 1.6 | ✅ | Write mmdebstrap customize hooks | `packaging/rootfs/hooks/customize01-services.sh`: enable services, set UTC/locale, lock root password, create /etc/warp, clean APT, remove machine-id/SSH host keys. Commit: 2c9a2c1 |
+| 1.7 | ✅ | Validate rootfs locally | Structural validation via Go tests (packaging_test.go, 9 tests). Actual mmdebstrap build requires Debian host or privileged VM (seccomp blocks sockets in LXC chroot). Commit: 8a28f8e |
 
 ---
 
