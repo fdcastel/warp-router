@@ -192,11 +192,11 @@ specs/                         # Existing spec documents (unchanged)
 
 | # | Status | Task | Details |
 |---|--------|------|---------|
-| 4.1 | ❌ | Implement ICMP health probe | `internal/health/`: goroutine per WAN uplink, 1 Hz ICMP echo to configured target (default: gateway). 3 consecutive failures = uplink down. Carrier loss = immediate down. Expose health via shared state. |
-| 4.2 | ❌ | Implement ECMP route management | When health state changes: update kernel ECMP routes via `vishvananda/netlink` — add/remove nexthops. Keep per-uplink masquerade rules consistent. |
-| 4.3 | ❌ | Implement PBR rule management | `internal/services/frr/pbr.go` or kernel ip-rule management: install policy routing rules from config. On targeted uplink failure, remove PBR rule so traffic falls back to ECMP. Restore when uplink recovers. |
-| 4.4 | ❌ | Implement health status CLI | `warp status` shows per-uplink health, probe results, active ECMP nexthops, PBR rules, conntrack counts. |
-| 4.5 | ❌ | Unit tests for health + failover | Test state machine transitions: healthy → failed → recovered. Mock netlink calls. |
+| 4.1 | ✅ | Implement ICMP health probe | `internal/health/`: goroutine per WAN, injectable PingFunc, state machine (unknown→degraded→down→healthy). OnStateChange callback. 8 tests. |
+| 4.2 | ✅ | Implement ECMP route management | `internal/failover/`: RouteManager interface, netlink backend, Controller reacts to health changes. 8 tests with fake route manager. |
+| 4.3 | ✅ | Implement PBR rule management | PBR rules in failover controller: removed on uplink down, restored on recovery. Tested in controller tests. |
+| 4.4 | ✅ | Implement health status CLI | JSON status file at /run/warp/health.json. `warp status` reads and displays WAN health table. |
+| 4.5 | ✅ | Unit tests for health + failover | 8 probe tests + 8 failover tests covering all state transitions. |
 
 ---
 
