@@ -156,12 +156,12 @@ specs/                         # Existing spec documents (unchanged)
 
 | # | Status | Task | Details |
 |---|--------|------|---------|
-| 2.1 | ❌ | Write LXC template build script | `packaging/lxc/build-lxc.sh`: takes rootfs dir, creates Proxmox-compatible `.tar.zst` archive with correct metadata (`/etc/hostname`, `/etc/network/interfaces` stubs). Output: `warp-router-<version>-lxc-amd64.tar.zst` |
-| 2.2 | ❌ | Write QCOW2 build script | `packaging/qcow2/build-qcow2.sh`: create raw disk image, partition (EFI + root), format ext4, copy rootfs, install GRUB, inject cloud-init datasource config (NoCloud), convert to qcow2. Use `virt-customize` or `guestfish` for post-processing. Output: `warp-router-<version>-amd64.qcow2` |
-| 2.3 | ❌ | Create cloud-init seed templates | `packaging/cloud-init/seed/`: `meta-data`, `user-data`, `network-config` templates. Default user-data enables SSH key injection, hostname setting, and runs `warp apply` on first boot (placeholder for Phase 3). |
-| 2.4 | ❌ | Test LXC image on Proxmox manually | Upload `.tar.zst` to Proxmox, create LXC container (`pct create`), start it, verify FRR/Kea/Unbound/nftables start, SSH accessible |
-| 2.5 | ❌ | Test QCOW2 image on Proxmox manually | Import qcow2 (`qm importdisk`), attach cloud-init drive, boot VM, verify cloud-init runs, SSH accessible, FRR/Kea/Unbound/nftables start |
-| 2.6 | ❌ | Add `make lxc` and `make qcow2` targets | Wire up the Makefile to call build scripts with proper versioning (git tag or `dev-<sha>`) |
+| 2.1 | ✅ | Write LXC template build script | `packaging/lxc/build-lxc.sh`: creates Proxmox-compatible `.tar.zst` from rootfs dir with /etc/hostname, /etc/network/interfaces stubs. Commit: 5624ac6 |
+| 2.2 | ✅ | Write QCOW2 build script | `packaging/qcow2/build-qcow2.sh`: GPT partitioning (BIOS+EFI+root), ext4, GRUB install, cloud-init NoCloud datasource, qemu-img convert. Commit: c33f490 |
+| 2.3 | ✅ | Create cloud-init seed templates | `packaging/cloud-init/seed/`: meta-data, user-data (SSH key injection, warp apply on first boot), network-config (DHCP default). Commit: 9296f7e |
+| 2.4 | ⏯️ | Test LXC image on Proxmox manually | Requires rootfs build on a Debian host first (blocked by LXC seccomp in dev environment). Deferred until rootfs is built on a proper build host. |
+| 2.5 | ⏯️ | Test QCOW2 image on Proxmox manually | Requires rootfs build on a Debian host first (blocked by LXC seccomp in dev environment). Deferred until rootfs is built on a proper build host. |
+| 2.6 | ✅ | Add `make lxc` and `make qcow2` targets | Makefile wired with version from git tags/SHA. QCOW2 target uses sudo. Commit: a066a97 |
 
 ---
 
