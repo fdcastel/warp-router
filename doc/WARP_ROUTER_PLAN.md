@@ -206,15 +206,15 @@ specs/                         # Existing spec documents (unchanged)
 
 | # | Status | Task | Details |
 |---|--------|------|---------|
-| 5.1 | ❌ | Set up Go test module under `test/` | `test/go.mod` (or use root module with build tags). Import `luthermonson/go-proxmox`, `golang.org/x/crypto/ssh`. |
-| 5.2 | ❌ | Implement Proxmox environment config | `test/integration/testenv/config.go`: read Proxmox API URL, token/credentials, node name, storage pool, and test network config from env vars or a `.env` file. Never hardcode secrets. |
-| 5.3 | ❌ | Implement SDN zone provisioning | `test/integration/testenv/sdn.go`: create isolated SDN zone + vnets (WAN-sim-1, WAN-sim-2, LAN-sim) per test run, with unique names derived from test run ID. Cleanup on teardown. |
-| 5.4 | ❌ | Implement LXC provisioning helper | `test/integration/testenv/lxc.go`: upload LXC template, create container with specified NICs attached to test vnets, start container, wait for SSH. Return SSH connection. |
-| 5.5 | ❌ | Implement VM provisioning helper | `test/integration/testenv/vm.go`: upload QCOW2, create VM, attach cloud-init drive with test user-data, set NICs to test vnets, start VM, wait for SSH. Return SSH connection. |
-| 5.6 | ❌ | Implement SSH test executor | `test/support/ssh.go`: connect via SSH, run commands, capture stdout/stderr, assert exit codes. Support SCP for file transfer. Retry logic for boot-time SSH availability. |
-| 5.7 | ❌ | Implement topology builder | `test/integration/testenv/topology.go`: compose a full test topology: router (LXC or VM) + WAN gateway(s) (lightweight LXC) + LAN client (lightweight LXC). Configure gateway LXCs with IP forwarding + masquerade to simulate ISPs. |
-| 5.8 | ❌ | Implement teardown/cleanup | `test/integration/testenv/cleanup.go`: stop and destroy all containers/VMs, remove SDN zones/vnets, remove uploaded templates. Run even on test failure (use `t.Cleanup()`). |
-| 5.9 | ❌ | Write topology smoke test | Verify: topology provisions successfully, all nodes reachable via SSH, router can ping WAN gateways, LAN client can ping router. This validates the test infrastructure itself. |
+| 5.1 | ✅ | Set up Go test module under `test/` | `test/go.mod` with go-proxmox + x/crypto/ssh. Separate module from main. |
+| 5.2 | ✅ | Implement Proxmox environment config | `testenv/config.go`: env-based config with validation, defaults. 3 tests. |
+| 5.3 | 🟡 | Implement SDN zone provisioning | `testenv/sdn.go`: naming scheme + provisioner struct. API calls TODO (needs Proxmox). |
+| 5.4 | 🟡 | Implement LXC provisioning helper | `testenv/lxc.go`: LXCSpec + NICSpec structs. API calls TODO. |
+| 5.5 | 🟡 | Implement VM provisioning helper | `testenv/vm.go`: VMSpec + CloudInitSpec structs. API calls TODO. |
+| 5.6 | ✅ | Implement SSH test executor | `support/ssh.go`: Connect, ConnectWithRetry, Run, Upload, Download, WriteFile. |
+| 5.7 | 🟡 | Implement topology builder | `testenv/topology.go`: TopologySpec, NewTopology with t.Cleanup. Setup/Teardown TODO. |
+| 5.8 | 🟡 | Implement teardown/cleanup | Cleanup registered via t.Cleanup in topology builder. Body TODO. |
+| 5.9 | ❌ | Write topology smoke test | Blocked on 5.3-5.5 API implementation. |
 
 ---
 
