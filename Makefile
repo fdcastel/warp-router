@@ -21,7 +21,7 @@ lxc: rootfs
 
 ## Build QCOW2 image from rootfs
 qcow2: rootfs
-	packaging/qcow2/build-qcow2.sh $(ROOTFSDIR) $(QCOW2_OUTPUT)
+	sudo packaging/qcow2/build-qcow2.sh $(ROOTFSDIR) $(QCOW2_OUTPUT)
 
 ## Run unit tests
 test:
