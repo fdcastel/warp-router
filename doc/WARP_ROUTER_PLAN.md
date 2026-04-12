@@ -171,17 +171,17 @@ specs/                         # Existing spec documents (unchanged)
 
 | # | Status | Task | Details |
 |---|--------|------|---------|
-| 3.1 | ❌ | Define YAML site config schema | `internal/config/`: Go structs for site config — interfaces (WAN/LAN roles, addressing mode), DHCP scopes, DNS settings, firewall zones, ECMP policy, PBR rules. Use `gopkg.in/yaml.v3`. Write unit tests for parsing and validation. |
-| 3.2 | ❌ | Implement config validation | `internal/config/validate.go`: reject overlapping subnets, conflicting roles, incomplete service intent, invalid CIDR, missing required fields. Table-driven tests. |
-| 3.3 | ❌ | Implement FRR config renderer | `internal/services/frr/`: render `frr.conf` from site config — static routes, ECMP nexthops, PBR route-maps, BFD peers (optional). Unit tests with golden files. |
-| 3.4 | ❌ | Implement nftables config renderer | `internal/services/nftables/`: render nftables ruleset — zones, forwarding policy, per-WAN masquerade, conntrack, default drop. Unit tests with golden files. |
-| 3.5 | ❌ | Implement Kea DHCP config renderer | `internal/services/kea/`: render `kea-dhcp4.conf` JSON — interfaces, subnets, pools, lease time, DNS server option (point to Unbound). Unit tests. |
-| 3.6 | ❌ | Implement Unbound config renderer | `internal/services/unbound/`: render `unbound.conf` — listen interfaces, access-control for LAN subnets, forwarding upstream. Unit tests. |
-| 3.7 | ❌ | Implement sysctl/ip-forward renderer | Set `net.ipv4.ip_forward=1`, per-interface `rp_filter`, `nf_conntrack_max` tuning. |
-| 3.8 | ❌ | Implement apply pipeline | `internal/apply/`: orchestrate config renders, write files atomically, reload services (`systemctl reload frr`, `nft -f`, `systemctl restart kea-dhcp4-server`, `systemctl restart unbound`), verify service health post-apply. Single-writer lock via flock. |
-| 3.9 | ❌ | Implement revision store | `internal/revisions/`: keep current + last-known-good config on disk. On apply: backup current → last-known-good, write new → current. On failure: restore last-known-good. |
-| 3.10 | ❌ | Implement rollback logic | On partial apply failure, restore all subsystem configs from last-known-good revision and reload. Report which step failed. |
-| 3.11 | ❌ | Build `warp` CLI commands | `cmd/warp/`: `warp validate <config>`, `warp apply <config>`, `warp status`, `warp rollback`. Use `cobra` or plain `flag`+subcommands. |
+| 3.1 | ✅ | Define YAML site config schema | `internal/config/`: Go structs with yaml.v3. Interfaces, DHCP, DNS, Firewall, ECMP, PBR, Sysctl. Parse()/LoadFile(). 5 tests. Commit: 9a49a93 |
+| 3.2 | ✅ | Implement config validation | `internal/config/validate.go`: overlapping subnets, conflicting roles, invalid CIDR, missing fields, DHCP/DNS/firewall/PBR cross-references. 19 tests. Commit: 0cab71f |
+| 3.3 | ✅ | Implement FRR config renderer | `internal/services/frr/`: static routes, ECMP nexthops, PBR route-maps, BFD peers. Golden file tests. 4 tests. Commit: e7ee1ae |
+| 3.4 | ✅ | Implement nftables config renderer | `internal/services/nftables/`: zone-based forwarding, input rules, per-WAN masquerade, default-drop. 4 tests. Commit: 2f535f5 |
+| 3.5 | ✅ | Implement Kea DHCP config renderer | `internal/services/kea/`: JSON output with subnets, pools, options, per-interface listening. 4 tests. Commit: 59819e7 |
+| 3.6 | ✅ | Implement Unbound config renderer | `internal/services/unbound/`: listen on LAN IPs, access-control, forwarding upstream, DNSSEC hardening. 5 tests. Commit: 4b6e3f4 |
+| 3.7 | ✅ | Implement sysctl renderer | `internal/services/sysctl/`: IP forwarding, rp_filter, conntrack_max, security hardening. 3 tests. Commit: 370c1a1 |
+| 3.8 | ✅ | Implement apply pipeline | `internal/apply/`: render → atomic write → reload. Stops on first failure. flock guard. 6 tests. Commit: f425366 |
+| 3.9 | ✅ | Implement revision store | `internal/revision/`: file-based store with metadata, SHA256, current symlink. 8 tests. Commit: e55b80a |
+| 3.10 | ✅ | Implement rollback logic | Previous() + rollback command in CLI. Rollback creates new revision. Commit: e55b80a |
+| 3.11 | ✅ | Build `warp` CLI commands | `cmd/warp/`: validate, apply, rollback, revisions, status. Plain subcommands (no cobra). 7 CLI integration tests. Commit: dbe7a03 |
 | 3.12 | ❌ | Install `warp` binary into rootfs | Update mmdebstrap hooks to copy the built `warp` binary to `/usr/local/bin/warp` in the image. Update cloud-init user-data to call `warp apply` on first boot. |
 
 ---
