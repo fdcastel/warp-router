@@ -1,0 +1,37 @@
+#cloud-config
+# Warp Router — Default cloud-init user-data
+# Override this file on your cloud-init drive to customize.
+
+hostname: warp-router
+
+# Allow SSH key injection
+ssh_pwauth: false
+disable_root: false
+
+users:
+  - name: root
+    lock_passwd: true
+    ssh_authorized_keys: []
+
+# Ensure warp config directory exists
+runcmd:
+  - mkdir -p /etc/warp
+  - |
+    if [ -x /usr/local/bin/warp ] && [ -f /etc/warp/site.yaml ]; then
+      /usr/local/bin/warp apply /etc/warp/site.yaml
+    fi
+
+# Grow root partition to fill disk
+growpart:
+  mode: auto
+  devices:
+    - /
+
+resize_rootfs: true
+
+# Set timezone
+timezone: UTC
+
+# Package management — security updates only
+package_update: false
+package_upgrade: false

@@ -1,0 +1,11 @@
+# Warp Router — Default cloud-init network config (v2)
+# Override this file on your cloud-init drive to customize.
+# By default, use DHCP on all interfaces.
+
+network:
+  version: 2
+  ethernets:
+    id0:
+      match:
+        name: "e*"
+      dhcp4: true
