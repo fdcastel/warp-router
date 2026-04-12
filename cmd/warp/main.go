@@ -7,6 +7,7 @@ import (
 
 	"github.com/fdcastel/warp-router/internal/apply"
 	"github.com/fdcastel/warp-router/internal/config"
+	"github.com/fdcastel/warp-router/internal/health"
 	"github.com/fdcastel/warp-router/internal/revision"
 )
 
@@ -240,5 +241,23 @@ func cmdStatus() {
 	fmt.Printf("SHA256:           %s\n", meta.SHA256)
 	if meta.Comment != "" {
 		fmt.Printf("Comment:          %s\n", meta.Comment)
+	}
+
+	// Show WAN health if available
+	report, err := health.ReadStatusFile(health.StatusFilePath)
+	if err == nil && len(report.Uplinks) > 0 {
+		fmt.Println()
+		fmt.Println("WAN Health:")
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "  UPLINK\tSTATUS\tTARGET\tLATENCY\tPROBES\tFAILURES")
+		for _, u := range report.Uplinks {
+			latency := "-"
+			if u.LastLatencyMs > 0 {
+				latency = fmt.Sprintf("%.1fms", u.LastLatencyMs)
+			}
+			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%d\t%d\n",
+				u.Name, u.Status, u.Target, latency, u.TotalProbes, u.TotalFailures)
+		}
+		w.Flush()
 	}
 }
