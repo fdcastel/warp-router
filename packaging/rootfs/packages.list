@@ -1,0 +1,42 @@
+# Warp Router — Debian 13 (Trixie) rootfs packages
+# One package per line. Comments start with #.
+
+# Routing suite
+frr
+
+# Firewall / NAT
+nftables
+
+# DHCP server
+kea-dhcp4-server
+
+# DNS resolver
+unbound
+
+# Cloud-init for VM images
+cloud-init
+
+# System base
+systemd
+systemd-sysv
+
+# Remote access
+openssh-server
+
+# Networking tools
+iproute2
+iputils-ping
+ethtool
+tcpdump
+traceroute
+
+# HTTP client / TLS
+curl
+ca-certificates
+
+# System utilities
+procps
+less
+nano
+sudo
+dbus
