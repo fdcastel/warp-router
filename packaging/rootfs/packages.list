@@ -12,6 +12,7 @@ kea-dhcp4-server
 
 # DNS resolver
 unbound
+dns-root-data
 
 # Cloud-init for VM images
 cloud-init
@@ -25,6 +26,7 @@ openssh-server
 
 # Networking tools
 iproute2
+ifupdown
 iputils-ping
 ethtool
 tcpdump

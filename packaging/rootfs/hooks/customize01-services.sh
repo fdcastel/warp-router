@@ -22,7 +22,11 @@ chroot "${ROOTFS}" systemctl enable cloud-init-local.service 2>/dev/null || true
 chroot "${ROOTFS}" systemctl enable cloud-init.service 2>/dev/null || true
 chroot "${ROOTFS}" systemctl enable cloud-config.service 2>/dev/null || true
 chroot "${ROOTFS}" systemctl enable cloud-final.service 2>/dev/null || true
-chroot "${ROOTFS}" systemctl enable systemd-networkd
+chroot "${ROOTFS}" systemctl enable networking
+
+# Disable systemd-networkd (we use ifupdown for Proxmox LXC compatibility)
+chroot "${ROOTFS}" systemctl disable systemd-networkd 2>/dev/null || true
+chroot "${ROOTFS}" systemctl mask systemd-networkd 2>/dev/null || true
 
 # --- Set timezone to UTC ---
 chroot "${ROOTFS}" ln -sf /usr/share/zoneinfo/UTC /etc/localtime
