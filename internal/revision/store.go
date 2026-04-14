@@ -43,7 +43,15 @@ func (s *Store) Save(yamlContent []byte, comment string) (string, error) {
 	}
 
 	now := time.Now().UTC()
-	id := now.Format("20060102T150405Z")
+	baseID := now.Format("20060102T150405Z")
+	id := baseID
+	for i := 1; ; i++ {
+		revDir := filepath.Join(s.Dir, id)
+		if _, err := os.Stat(revDir); os.IsNotExist(err) {
+			break
+		}
+		id = fmt.Sprintf("%s-%02d", baseID, i)
+	}
 
 	hash := sha256.Sum256(yamlContent)
 	hashStr := hex.EncodeToString(hash[:])

@@ -142,15 +142,32 @@ func (p *PVE) StopCT(vmid int) error {
 // DestroyCT destroys a container (stops first if running).
 func (p *PVE) DestroyCT(vmid int) error {
 	p.StopCT(vmid)
-	// Retry destroy — container may take a moment to fully stop
+	// Retry destroy — container may take a moment to fully stop.
+	// Some runs leave busy ZFS subvolumes; in that case do a forced cleanup.
 	for i := 0; i < 5; i++ {
-		out, err := p.Run(fmt.Sprintf("pct destroy %d --force --purge 2>&1; true", vmid))
-		if err == nil && !strings.Contains(out, "already exists") && !strings.Contains(out, "unable to") {
+		out, _ := p.Run(fmt.Sprintf("pct destroy %d --force --purge 2>&1; true", vmid))
+
+		// Successful destroy path
+		existsOut, _ := p.Run(fmt.Sprintf("pct config %d >/dev/null 2>&1; echo $?", vmid))
+		if strings.TrimSpace(existsOut) == "255" {
 			return nil
 		}
+
+		// Busy ZFS dataset path: force remove subvolume + CT config
+		if strings.Contains(out, "dataset is busy") || strings.Contains(out, "cannot destroy") {
+			_, _ = p.Run(fmt.Sprintf("zfs set mountpoint=none spool/subvol-%d-disk-0 2>/dev/null; true", vmid))
+			_, _ = p.Run(fmt.Sprintf("zfs destroy -f spool/subvol-%d-disk-0 2>/dev/null; true", vmid))
+			_, _ = p.Run(fmt.Sprintf("rm -f /etc/pve/lxc/%d.conf 2>/dev/null; true", vmid))
+			existsOut2, _ := p.Run(fmt.Sprintf("pct config %d >/dev/null 2>&1; echo $?", vmid))
+			if strings.TrimSpace(existsOut2) == "255" {
+				return nil
+			}
+		}
+
 		time.Sleep(2 * time.Second)
 	}
-	return nil
+
+	return fmt.Errorf("failed to destroy CT %d after retries", vmid)
 }
 
 // ExecCT runs a command inside a container via pct exec.

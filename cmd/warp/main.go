@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -340,6 +342,23 @@ func cmdMonitor() {
 	// Create components
 	routes := failover.NewVtyshRouteManager(initialRoutes)
 	prober := health.NewProber()
+
+	// Use the system ping command for ICMP probes.
+	// The Go ICMP library needs ping_group_range set (fails in unprivileged LXC),
+	// but /bin/ping has cap_net_raw+ep and works everywhere.
+	prober.PingFunc = func(target string, timeout time.Duration) (time.Duration, error) {
+		secs := int(timeout.Seconds())
+		if secs < 1 {
+			secs = 1
+		}
+		start := time.Now()
+		cmd := exec.Command("ping", "-c", "1", "-W", strconv.Itoa(secs), target)
+		if err := cmd.Run(); err != nil {
+			return 0, err
+		}
+		return time.Since(start), nil
+	}
+
 	ctrl := failover.NewController(cfg, routes, prober)
 
 	// Wire up state change callback
