@@ -142,10 +142,15 @@ func (p *PVE) StopCT(vmid int) error {
 // DestroyCT destroys a container (stops first if running).
 func (p *PVE) DestroyCT(vmid int) error {
 	p.StopCT(vmid)
-	// Wait briefly for stop to complete
-	time.Sleep(2 * time.Second)
-	_, err := p.Run(fmt.Sprintf("pct destroy %d --force --purge 2>/dev/null; true", vmid))
-	return err
+	// Retry destroy — container may take a moment to fully stop
+	for i := 0; i < 5; i++ {
+		out, err := p.Run(fmt.Sprintf("pct destroy %d --force --purge 2>&1; true", vmid))
+		if err == nil && !strings.Contains(out, "already exists") && !strings.Contains(out, "unable to") {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return nil
 }
 
 // ExecCT runs a command inside a container via pct exec.

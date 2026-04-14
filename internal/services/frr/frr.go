@@ -23,8 +23,10 @@ ip route {{ .Prefix }} {{ .NextHop }}{{ if .Device }} {{ .Device }}{{ end }}{{ i
 {{- end }}
 !
 {{- if .ECMP }}
-! ECMP default route
-ip route 0.0.0.0/0{{ range .ECMPNextHops }} nexthop {{ .NextHop }} {{ .Device }}{{ if .Weight }} weight {{ .Weight }}{{ end }}{{ end }}
+! ECMP default routes (FRR merges equal-cost routes automatically)
+{{- range .ECMPNextHops }}
+ip route 0.0.0.0/0 {{ .NextHop }} {{ .Device }}
+{{- end }}
 {{- end }}
 !
 {{- if .PBR }}
