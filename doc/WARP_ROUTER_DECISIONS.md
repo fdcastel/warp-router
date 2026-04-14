@@ -107,3 +107,13 @@
 **Context**: Investigated whether `tmp/Proxmox-Automation/new-vm.sh` could help build QCOW2 images.  
 **Finding**: The scripts don't build images — they consume pre-built cloud images (e.g., Debian genericcloud QCOW2 from upstream). `new-vm.sh` uses `qm create --scsi0 import-from=<image>` to import an existing QCOW2 as a VM disk, then configures cloud-init for first-boot customization. This is an orthogonal approach: we need to *build* the QCOW2, not just import one.  
 **Potential use**: Could adapt the `new-vm.sh` approach for integration testing — use our LXC template as the primary image and run VM tests by importing a generic cloud image + cloud-init warp configuration.
+
+### LL-009: FRR ECMP Requires Separate ip route Commands (2026-04-14)
+**Context**: ECMP test showed FRR config was written correctly but no ECMP routes appeared in the RIB.  
+**Problem**: The FRR template generated a single-line multipath route: `ip route 0.0.0.0/0 nexthop GW1 dev1 nexthop GW2 dev2`. This syntax is invalid for FRR's `staticd`. FRR silently ignored the route.  
+**Resolution**: Changed the template to emit separate `ip route` commands per nexthop. FRR automatically merges them into ECMP when they have the same prefix and admin distance. Verified via `vtysh` showing `S>* 0.0.0.0/0 via GW1 ... via GW2`.
+
+### LL-010: Unbound Overlay Must Match Default Mode (2026-04-14)
+**Context**: Unbound reload failed intermittently during integration test suite.  
+**Problem**: The rootfs overlay installed unbound with `auto-trust-anchor-file` (DNSSEC validator mode). When `warp apply` wrote a forwarding-mode config with `module-config: "iterator"`, unbound couldn't live-reload across module changes. The reload-or-restart would fail in unprivileged LXC.  
+**Resolution**: Changed the overlay default to `module-config: "iterator"` (forwarding mode) since that's the expected default for router deployments. Full DNSSEC is still available when `warp apply` configures recursion mode.
