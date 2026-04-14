@@ -279,11 +279,11 @@ specs/                         # Existing spec documents (unchanged)
 
 | # | Status | Task | Details |
 |---|--------|------|---------|
-| 9.1 | ❌ | Security hardening of base image | Disable password auth on SSH, remove unnecessary packages, set secure sysctl defaults (rp_filter, syncookies, ICMP redirect disabled), configure unattended-upgrades for security patches. |
-| 9.2 | ❌ | Write operator quickstart guide | `docs/quickstart.md`: download image, deploy on Proxmox (LXC or VM), write site config, validate, apply, verify connectivity. |
-| 9.3 | ❌ | Write site config reference | `docs/site-config-reference.md`: document every YAML field with examples, defaults, and validation rules. |
-| 9.4 | ❌ | Write test infrastructure README | `test/README.md`: how to set up a Proxmox test environment, required env vars, run integration tests locally, interpret results. |
-| 9.5 | ❌ | Add README.md to repo root | Project overview, quick install, link to docs, build status badge, release link. |
+| 9.1 | ✅ | Security hardening of base image | SSH password auth disabled in overlay, secure sysctl baseline already present, removed unnecessary package (`nano`), added `unattended-upgrades` package and apt unattended security policy in overlay (`20auto-upgrades`, `52warp-security-upgrades`). |
+| 9.2 | ✅ | Write operator quickstart guide | Added `doc/quickstart.md` with build, deploy, validate/apply, connectivity verification, and rollback flow. |
+| 9.3 | ✅ | Write site config reference | Added `doc/site-config-reference.md` documenting schema fields, validation rules, defaults, and full example config. |
+| 9.4 | ✅ | Write test infrastructure README | Added `test/README.md` covering Proxmox prerequisites, environment variables, execution commands, and troubleshooting flow. |
+| 9.5 | ✅ | Add README.md to repo root | Added root `README.md` with project overview, quick start, docs links, workflow badge, release link, and Proxmox-Automation references. |
 | 9.6 | ❌ | Validate full release cycle end-to-end | Tag a release, verify CI builds images, publishes to GitHub Releases, integration tests pass against published images. |
 
 ---

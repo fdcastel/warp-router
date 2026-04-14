@@ -14,20 +14,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
-
-      - name: Cache rootfs build directory
-        id: cache-rootfs
-        uses: actions/cache@v4
-        with:
-          path: build/rootfs
-          key: rootfs-${{ runner.os }}-${{ hashFiles('packaging/rootfs/packages.list', 'packaging/rootfs/hooks/**', 'packaging/rootfs/overlay/**') }}
 
       - name: Install build dependencies
         run: |
@@ -46,12 +39,16 @@ jobs:
       - name: Build artifacts
         run: |
           make build
-          if [ "${{ steps.cache-rootfs.outputs.cache-hit }}" != "true" ]; then
-            make rootfs
-            sudo chown -R "$USER":"$USER" build/rootfs
-          fi
-          make lxc
-          make qcow2
+          make rootfs
+          sudo chown -R "$USER":"$USER" build/rootfs
+
+          VERSION="${GITHUB_REF_NAME}"
+          packaging/lxc/build-lxc.sh \
+            build/rootfs \
+            build/warp-router-${VERSION}-lxc-amd64.tar.zst
+          sudo packaging/qcow2/build-qcow2.sh \
+            build/rootfs \
+            build/warp-router-${VERSION}-amd64.qcow2
 
       - name: Generate checksums
         run: |

@@ -22,6 +22,10 @@ func TestPackageListExists(t *testing.T) {
 			t.Errorf("packages.list missing required package: %s", pkg)
 		}
 	}
+
+	if !strings.Contains(content, "unattended-upgrades") {
+		t.Error("packages.list missing required package: unattended-upgrades")
+	}
 }
 
 // TestBuildScriptExists verifies the rootfs build script exists and is executable.
@@ -66,6 +70,8 @@ func TestOverlayStructure(t *testing.T) {
 		"packaging/rootfs/overlay/etc/kea/kea-dhcp4.conf",
 		"packaging/rootfs/overlay/etc/unbound/unbound.conf.d/warp-router.conf",
 		"packaging/rootfs/overlay/etc/ssh/sshd_config.d/99-warp-router.conf",
+		"packaging/rootfs/overlay/etc/apt/apt.conf.d/20auto-upgrades",
+		"packaging/rootfs/overlay/etc/apt/apt.conf.d/52warp-security-upgrades",
 	}
 
 	for _, f := range requiredFiles {
@@ -167,5 +173,33 @@ func TestSSHHardening(t *testing.T) {
 	}
 	if !strings.Contains(content, "PermitRootLogin prohibit-password") {
 		t.Error("SSH config does not restrict root login to key-only")
+	}
+}
+
+// TestUnattendedUpgradesConfig verifies security unattended upgrades are enabled.
+func TestUnattendedUpgradesConfig(t *testing.T) {
+	data, err := os.ReadFile("packaging/rootfs/overlay/etc/apt/apt.conf.d/20auto-upgrades")
+	if err != nil {
+		t.Fatalf("failed to read apt auto-upgrades config: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, "APT::Periodic::Update-Package-Lists \"1\"") {
+		t.Error("20auto-upgrades does not enable package list refresh")
+	}
+	if !strings.Contains(content, "APT::Periodic::Unattended-Upgrade \"1\"") {
+		t.Error("20auto-upgrades does not enable unattended upgrades")
+	}
+
+	policyData, err := os.ReadFile("packaging/rootfs/overlay/etc/apt/apt.conf.d/52warp-security-upgrades")
+	if err != nil {
+		t.Fatalf("failed to read apt security policy config: %v", err)
+	}
+	policy := string(policyData)
+	if !strings.Contains(policy, "Origins-Pattern") {
+		t.Error("52warp-security-upgrades missing Origins-Pattern")
+	}
+	if !strings.Contains(policy, "${distro_codename}-security") {
+		t.Error("52warp-security-upgrades missing security pocket selector")
 	}
 }

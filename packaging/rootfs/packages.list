@@ -17,6 +17,7 @@ dns-root-data
 
 # Cloud-init for VM images
 cloud-init
+unattended-upgrades
 
 # System base
 systemd
@@ -40,6 +41,5 @@ ca-certificates
 # System utilities
 procps
 less
-nano
 sudo
 dbus

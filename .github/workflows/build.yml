@@ -18,20 +18,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
-
-      - name: Cache rootfs build directory
-        id: cache-rootfs
-        uses: actions/cache@v4
-        with:
-          path: build/rootfs
-          key: rootfs-${{ runner.os }}-${{ hashFiles('packaging/rootfs/packages.list', 'packaging/rootfs/hooks/**', 'packaging/rootfs/overlay/**') }}
 
       - name: Install build dependencies
         run: |
@@ -54,16 +47,30 @@ jobs:
         run: make build
 
       - name: Build rootfs
-        if: steps.cache-rootfs.outputs.cache-hit != 'true'
         run: |
           make rootfs
           sudo chown -R "$USER":"$USER" build/rootfs
 
+      - name: Compute artifact version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build LXC artifact
-        run: make lxc
+        run: |
+          packaging/lxc/build-lxc.sh \
+            build/rootfs \
+            build/warp-router-${{ steps.version.outputs.value }}-lxc-amd64.tar.zst
 
       - name: Build QCOW2 artifact
-        run: make qcow2
+        run: |
+          sudo packaging/qcow2/build-qcow2.sh \
+            build/rootfs \
+            build/warp-router-${{ steps.version.outputs.value }}-amd64.qcow2
 
       - name: Compute checksums
         run: |
@@ -71,7 +78,7 @@ jobs:
           sha256sum build/warp-router-*-amd64.qcow2 >> build/checksums.txt
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: warp-router-build-artifacts
           path: |

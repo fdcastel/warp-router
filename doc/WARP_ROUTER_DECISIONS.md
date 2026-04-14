@@ -62,7 +62,7 @@
 
 ### AD-012: QCOW2 Build Deferred — Requires Bare Metal or Privileged VM (2026-04-14)
 **Decision**: Defer QCOW2 image testing (task 2.5) until a suitable build environment is available.  
-**Rationale**: The QCOW2 build script requires `losetup`, `sgdisk`, `mkfs.ext4`, `mount`, `chroot`, and `grub-install` — all of which need either bare-metal access or a privileged VM. The dev environment (tst54) is an unprivileged LXC with no loop devices, no block device access, and seccomp restrictions. See `tmp/CURRENT_LIMITATIONS.md` for details and alternatives.
+**Rationale**: The QCOW2 build script requires `losetup`, `sgdisk`, `mkfs.ext4`, `mount`, `chroot`, and `grub-install` — all of which need either bare-metal access or a privileged VM. The dev environment (tst54) is an unprivileged LXC with no loop devices, no block device access, and seccomp restrictions.
 
 ---
 
@@ -104,7 +104,7 @@
 **Resolution**: Tests that use dummy interfaces explicitly set `dns.listen: [127.0.0.1]` to override the auto-generated listen list.
 
 ### LL-008: Proxmox-Automation Scripts Use a Different Approach (2026-04-14)
-**Context**: Investigated whether `tmp/Proxmox-Automation/new-vm.sh` could help build QCOW2 images.  
+**Context**: Investigated whether the public Proxmox-Automation script (`new-vm.sh`) from https://github.com/fdcastel/Proxmox-Automation could help build QCOW2 images.  
 **Finding**: The scripts don't build images — they consume pre-built cloud images (e.g., Debian genericcloud QCOW2 from upstream). `new-vm.sh` uses `qm create --scsi0 import-from=<image>` to import an existing QCOW2 as a VM disk, then configures cloud-init for first-boot customization. This is an orthogonal approach: we need to *build* the QCOW2, not just import one.  
 **Potential use**: Could adapt the `new-vm.sh` approach for integration testing — use our LXC template as the primary image and run VM tests by importing a generic cloud image + cloud-init warp configuration.
 
@@ -143,6 +143,10 @@
 ### AD-016: Integration Tests Use Shared Topology Helpers (2026-04-14)
 **Decision**: Centralize common integration-test setup in `testenv` helpers instead of duplicating template names, config-apply blocks, dummy-WAN setup, and polling loops in individual test files.  
 **Rationale**: Phase 10 surfaced repeated test bugs caused by copy-pasted setup code and fixed VMID allocation. Moving these patterns behind `Topology` helpers keeps tests aligned with the supported config schema, reduces drift, and makes future integration fixes cheaper.
+
+### AD-017: Base Image Security Auto-Patching Enabled by Default (2026-04-14)
+**Decision**: Install and enable unattended security updates in the rootfs image (`unattended-upgrades` package plus apt policy overlays).  
+**Rationale**: Router appliances are long-running and frequently internet-exposed. Enabling periodic package index refresh and unattended security updates reduces patch latency without requiring interactive maintenance windows. Policy is restricted to Debian security origin patterns to avoid broad, unbounded package churn.
 
 ### LL-013: Revision IDs Collide Under Fast Apply/Rollback (2026-04-14)
 **Context**: Full integration suite intermittently failed `TestConfigRollback` expecting 3 revisions but finding 2.  

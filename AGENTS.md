@@ -4,6 +4,7 @@
 - Project decisions and lessons learned are kept in `doc/WARP_ROUTER_DECISIONS.md`. Keep this file always updated. 
 - Do smaller commits. Use conventional commits.
 - Use `./tmp` folder for temporary files and scripts. Do not pollute the project folder.
+- Never reference any file from `./tmp` folder in documentation or commit messages. These files are temporary and not commited.
 
 # About tests
 
