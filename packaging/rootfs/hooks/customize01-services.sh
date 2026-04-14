@@ -18,7 +18,10 @@ chroot "${ROOTFS}" systemctl enable nftables
 chroot "${ROOTFS}" systemctl enable kea-dhcp4-server
 chroot "${ROOTFS}" systemctl enable unbound
 chroot "${ROOTFS}" systemctl enable ssh
-chroot "${ROOTFS}" systemctl enable cloud-init
+chroot "${ROOTFS}" systemctl enable cloud-init-local.service 2>/dev/null || true
+chroot "${ROOTFS}" systemctl enable cloud-init.service 2>/dev/null || true
+chroot "${ROOTFS}" systemctl enable cloud-config.service 2>/dev/null || true
+chroot "${ROOTFS}" systemctl enable cloud-final.service 2>/dev/null || true
 chroot "${ROOTFS}" systemctl enable systemd-networkd
 
 # --- Set timezone to UTC ---

@@ -206,15 +206,15 @@ specs/                         # Existing spec documents (unchanged)
 
 | # | Status | Task | Details |
 |---|--------|------|---------|
-| 5.1 | ✅ | Set up Go test module under `test/` | `test/go.mod` with go-proxmox + x/crypto/ssh. Separate module from main. |
-| 5.2 | ✅ | Implement Proxmox environment config | `testenv/config.go`: env-based config with validation, defaults. 3 tests. |
-| 5.3 | 🟡 | Implement SDN zone provisioning | `testenv/sdn.go`: naming scheme + provisioner struct. API calls TODO (needs Proxmox). |
-| 5.4 | 🟡 | Implement LXC provisioning helper | `testenv/lxc.go`: LXCSpec + NICSpec structs. API calls TODO. |
-| 5.5 | 🟡 | Implement VM provisioning helper | `testenv/vm.go`: VMSpec + CloudInitSpec structs. API calls TODO. |
-| 5.6 | ✅ | Implement SSH test executor | `support/ssh.go`: Connect, ConnectWithRetry, Run, Upload, Download, WriteFile. |
-| 5.7 | 🟡 | Implement topology builder | `testenv/topology.go`: TopologySpec, NewTopology with t.Cleanup. Setup/Teardown TODO. |
-| 5.8 | 🟡 | Implement teardown/cleanup | Cleanup registered via t.Cleanup in topology builder. Body TODO. |
-| 5.9 | ❌ | Write topology smoke test | Blocked on 5.3-5.5 API implementation. |
+| 5.1 | ✅ | Set up Go test module under `test/` | `test/go.mod` with x/crypto/ssh. Separate module. |
+| 5.2 | ✅ | Implement Proxmox environment config | `testenv/config.go`: SSH-based config (PVE_HOST, PVE_STORAGE, etc.). 3 tests. |
+| 5.3 | ✅ | Implement network isolation | `testenv/pve.go`: CreateBridge/DestroyBridge for ephemeral per-run bridges. Replaces SDN zones. |
+| 5.4 | ✅ | Implement LXC provisioning helper | `testenv/pve.go`: CreateCT, StartCT, StopCT, DestroyCT, ExecCT, WaitForCT via SSH+pct. |
+| 5.5 | ⏯️ | Implement VM provisioning helper | Deferred until QCOW2 images are built (Phase 2). |
+| 5.6 | ✅ | Implement SSH test executor | `support/ssh.go` + `testenv/pve.go`: SSH-based command execution on PVE host and via pct exec. |
+| 5.7 | ✅ | Implement topology builder | `testenv/topology.go`: NewTopology creates bridge + router/client CTs, t.Cleanup teardown. |
+| 5.8 | ✅ | Implement teardown/cleanup | Topology.Teardown destroys CTs (reverse order) + bridge + temp files. |
+| 5.9 | ✅ | Write topology smoke test | `integration/smoke_test.go`: 4 subtests (router running, client running, bidirectional ping). Tested on PVE 9.1.4. |
 
 ---
 

@@ -84,4 +84,14 @@ if [[ -d "$HOOKS_DIR" ]]; then
     done
 fi
 
+# --- Install warp binary (if present in build/) ---
+
+WARP_BIN="${SCRIPT_DIR}/../../build/warp"
+if [[ -f "$WARP_BIN" ]]; then
+    echo "==> Installing warp binary"
+    install -m 0755 "$WARP_BIN" "${OUTPUT_DIR}/usr/local/bin/warp"
+else
+    echo "==> WARNING: warp binary not found at ${WARP_BIN}, skipping installation"
+fi
+
 echo "==> Rootfs build complete: ${OUTPUT_DIR}"
