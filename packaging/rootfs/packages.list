@@ -3,6 +3,7 @@
 
 # Routing suite
 frr
+frr-pythontools
 
 # Firewall / NAT
 nftables

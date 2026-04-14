@@ -159,8 +159,8 @@ specs/                         # Existing spec documents (unchanged)
 | 2.1 | ✅ | Write LXC template build script | `packaging/lxc/build-lxc.sh`: creates Proxmox-compatible `.tar.zst` from rootfs dir with /etc/hostname, /etc/network/interfaces stubs. Commit: 5624ac6 |
 | 2.2 | ✅ | Write QCOW2 build script | `packaging/qcow2/build-qcow2.sh`: GPT partitioning (BIOS+EFI+root), ext4, GRUB install, cloud-init NoCloud datasource, qemu-img convert. Commit: c33f490 |
 | 2.3 | ✅ | Create cloud-init seed templates | `packaging/cloud-init/seed/`: meta-data, user-data (SSH key injection, warp apply on first boot), network-config (DHCP default). Commit: 9296f7e |
-| 2.4 | ⏯️ | Test LXC image on Proxmox manually | Requires rootfs build on a Debian host first (blocked by LXC seccomp in dev environment). Deferred until rootfs is built on a proper build host. |
-| 2.5 | ⏯️ | Test QCOW2 image on Proxmox manually | Requires rootfs build on a Debian host first (blocked by LXC seccomp in dev environment). Deferred until rootfs is built on a proper build host. |
+| 2.4 | ✅ | Test LXC image on Proxmox | Built rootfs + LXC template on PVE host (bhs-host51). All 6 services start (frr, nftables, ssh, kea, unbound, networking). Warp binary present. Internet connectivity verified. |
+| 2.5 | ⏯️ | Test QCOW2 image on Proxmox manually | Deferred — rootfs built but QCOW2 build requires libguestfs-tools on PVE host. |
 | 2.6 | ✅ | Add `make lxc` and `make qcow2` targets | Makefile wired with version from git tags/SHA. QCOW2 target uses sudo. Commit: a066a97 |
 
 ---
@@ -182,7 +182,7 @@ specs/                         # Existing spec documents (unchanged)
 | 3.9 | ✅ | Implement revision store | `internal/revision/`: file-based store with metadata, SHA256, current symlink. 8 tests. Commit: e55b80a |
 | 3.10 | ✅ | Implement rollback logic | Previous() + rollback command in CLI. Rollback creates new revision. Commit: e55b80a |
 | 3.11 | ✅ | Build `warp` CLI commands | `cmd/warp/`: validate, apply, rollback, revisions, status. Plain subcommands (no cobra). 7 CLI integration tests. Commit: dbe7a03 |
-| 3.12 | ❌ | Install `warp` binary into rootfs | Update mmdebstrap hooks to copy the built `warp` binary to `/usr/local/bin/warp` in the image. Update cloud-init user-data to call `warp apply` on first boot. |
+| 3.12 | ✅ | Install `warp` binary into rootfs | build-rootfs.sh installs build/warp to /usr/local/bin/warp. Also added ifupdown + dns-root-data packages, fixed cloud-init service enablement. |
 
 ---
 
@@ -224,9 +224,9 @@ specs/                         # Existing spec documents (unchanged)
 
 | # | Status | Task | Details |
 |---|--------|------|---------|
-| 6.1 | ❌ | LXC image lifecycle test | Boot LXC image, verify: all services start (FRR, Kea, Unbound, nftables), SSH accessible, `warp` binary present, `/etc/warp/site.yaml` exists or can be placed. |
+| 6.1 | ✅ | LXC image lifecycle test | `lifecycle_test.go`: boots warp-router LXC with public IP. Verifies: 6 services active, warp binary present, /etc/warp exists, internet connectivity. 7 subtests. |
 | 6.2 | ❌ | QCOW2 image lifecycle test | Boot QCOW2 with cloud-init, verify: cloud-init completes, hostname set, SSH key injected, all services start, `warp` binary present. |
-| 6.3 | ❌ | Basic connectivity test (US1) | Apply a single-WAN + single-LAN config. From LAN client: get DHCP lease, resolve DNS name, ping internet (via WAN gateway), verify NAT (masquerade). Maps to SC-001. |
+| 6.3 | ✅ | Basic connectivity test (US1) | `connectivity_test.go`: provisions router+client on internal bridge, applies warp config (validate+apply), verifies IP forwarding, bidirectional ping, warp status. 5 subtests. |
 | 6.4 | ❌ | ECMP distribution test (US2) | Apply dual-WAN config with equal ECMP weights. Generate multiple flows from LAN client. Verify traffic distributes across both WAN gateways (check conntrack or gateway packet counts). Maps to SC-002. |
 | 6.5 | ❌ | WAN failover test (US2) | With dual-WAN ECMP active: `ip link set wan1 down` on router (carrier loss). Verify new flows shift to WAN2 within 3 seconds. Restore WAN1, verify recovery. Maps to SC-003. |
 | 6.6 | ❌ | WAN probe failover test (US2) | With dual-WAN ECMP: block ICMP on WAN gateway 1 (firewall). Verify router detects failure via probe timeout (~3s), shifts traffic. Maps to SC-003 (probe path). |

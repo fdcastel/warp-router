@@ -163,8 +163,9 @@ func atomicWrite(path, content string) error {
 }
 
 // applySysctl loads sysctl settings from a file.
+// Uses -e to continue on errors (e.g., conntrack_max in unprivileged LXC).
 func applySysctl(path string) error {
-	cmd := exec.Command("sysctl", "-p", path)
+	cmd := exec.Command("sysctl", "-e", "-p", path)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
