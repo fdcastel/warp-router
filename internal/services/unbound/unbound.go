@@ -48,16 +48,20 @@ server:
 
     # Root hints
     root-hints: "/usr/share/dns/root.hints"
-
-    # Trust anchor for DNSSEC
-    auto-trust-anchor-file: "/var/lib/unbound/root.key"
 {{- if .Forwarders }}
+
+    # Forwarding mode — upstream handles DNSSEC validation
+    module-config: "iterator"
 
 forward-zone:
     name: "."
 {{- range .Forwarders }}
     forward-addr: {{ . }}
 {{- end }}
+{{- else }}
+
+    # Full recursion mode with DNSSEC validation
+    auto-trust-anchor-file: "/var/lib/unbound/root.key"
 {{- end }}
 `
 

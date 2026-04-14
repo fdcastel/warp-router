@@ -40,6 +40,8 @@ interfaces:
 
 dns:
   enabled: true
+  listen:
+    - 127.0.0.1
   forwarders:
     - 1.1.1.1
     - 8.8.8.8
@@ -62,15 +64,12 @@ dns:
 	t.Run("WarpApply", func(t *testing.T) {
 		out, err := topo.PVE.ExecCT(routerVMID, "/usr/local/bin/warp apply /etc/warp/site.yaml 2>&1")
 		if err != nil {
-			// Apply may fail on FRR reload (dummy0 doesn't exist in container)
-			// or conntrack_max (unprivileged LXC). Check partial success.
-			if !strings.Contains(out, "Saved revision") {
-				t.Fatalf("warp apply failed without saving revision: %v\noutput: %s", err, out)
-			}
-			t.Logf("warp apply partial failure (expected in LXC): %s", out)
-		} else {
-			t.Logf("warp apply output: %s", out)
+			t.Fatalf("warp apply failed: %v\noutput: %s", err, out)
 		}
+		if !strings.Contains(out, "Apply complete") {
+			t.Errorf("expected 'Apply complete' in output: %s", out)
+		}
+		t.Logf("warp apply output: %s", out)
 	})
 
 	t.Run("IPForwardingEnabled", func(t *testing.T) {

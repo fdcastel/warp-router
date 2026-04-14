@@ -135,7 +135,7 @@ func (p *PVE) StartCT(vmid int) error {
 
 // StopCT stops a container (force).
 func (p *PVE) StopCT(vmid int) error {
-	_, _ = p.Run(fmt.Sprintf("pct stop %d 2>/dev/null", vmid))
+	_, _ = p.Run(fmt.Sprintf("pct stop %d 2>/dev/null; while pct status %d 2>/dev/null | grep -q running; do sleep 1; done; true", vmid, vmid))
 	return nil
 }
 
