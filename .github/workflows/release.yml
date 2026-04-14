@@ -33,6 +33,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            debian-archive-keyring \
             mmdebstrap \
             zstd \
             qemu-utils \

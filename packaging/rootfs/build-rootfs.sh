@@ -57,10 +57,16 @@ if [[ -d "$HOOKS_DIR" ]]; then
     done
 fi
 
+KEYRING_ARGS=()
+if [[ -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]]; then
+    KEYRING_ARGS+=(--keyring=/usr/share/keyrings/debian-archive-keyring.gpg)
+fi
+
 mmdebstrap \
     --variant=minbase \
     --components="${COMPONENTS}" \
     --include="${PACKAGES}" \
+    "${KEYRING_ARGS[@]}" \
     "${HOOK_ARGS[@]}" \
     "$SUITE" \
     "$OUTPUT_DIR" \
