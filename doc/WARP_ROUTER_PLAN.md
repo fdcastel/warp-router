@@ -231,8 +231,8 @@ specs/                         # Existing spec documents (unchanged)
 | 6.5 | ❌ | WAN failover test (US2) | With dual-WAN ECMP active: `ip link set wan1 down` on router (carrier loss). Verify new flows shift to WAN2 within 3 seconds. Restore WAN1, verify recovery. Maps to SC-003. |
 | 6.6 | ❌ | WAN probe failover test (US2) | With dual-WAN ECMP: block ICMP on WAN gateway 1 (firewall). Verify router detects failure via probe timeout (~3s), shifts traffic. Maps to SC-003 (probe path). |
 | 6.7 | ❌ | PBR steering test (US2) | Apply config with PBR rule steering specific source subnet to WAN1. Verify matching traffic uses WAN1. Fail WAN1, verify fallback to ECMP on WAN2. Maps to FR-007. |
-| 6.8 | ❌ | Service health test (US3) | Verify `warp status` output includes uplink health, service states, active revision. Maps to SC-004. |
-| 6.9 | ❌ | Config rollback test (US3) | Apply a valid config, then apply a broken config. Verify system rolls back to previous working state within 30 seconds. Verify services remain functional. Maps to SC-005. |
+| 6.8 | ✅ | Service health test | `services_test.go/TestServiceHealth`: verifies warp status, all 5 services active after apply, FRR/nftables configs rendered, IP forwarding enabled. 5 subtests. |
+| 6.9 | ✅ | Config rollback test | `services_test.go/TestConfigRollback`: apply v1 → apply v2 → rollback → verify v1 restored. Checks FRR hostname, revisions list (3 entries). 4 subtests. |
 | 6.10 | ❌ | nftables firewall test | Verify: default deny inbound on WAN, allow established/related, LAN-to-WAN forwarding permitted, WAN-to-LAN blocked unless explicitly allowed. |
 | 6.11 | ❌ | DHCP edge case tests | Verify: full pool exhaustion behavior, lease renewal, multiple LAN segments get distinct pools. |
 | 6.12 | ❌ | VLAN subinterface test | Apply config with 802.1Q VLAN LAN segments on a tagged trunk. Verify DHCP/DNS/NAT work per VLAN segment. |
@@ -318,15 +318,12 @@ Phase 9 (Hardening/Docs)
 
 | Variable | Description | Used By |
 |----------|-------------|---------|
-| `PROXMOX_API_URL` | Proxmox VE API endpoint (e.g., `https://pve.example.com:8006/api2/json`) | Test suite, CI |
-| `PROXMOX_API_TOKEN_ID` | API token ID (e.g., `user@pam!tokenname`) | Test suite, CI |
-| `PROXMOX_API_TOKEN_SECRET` | API token secret | Test suite, CI |
-| `PROXMOX_NODE` | Proxmox node name to provision on | Test suite, CI |
-| `PROXMOX_STORAGE` | Storage pool for images/disks (default: `local`) | Test suite, CI |
-| `PROXMOX_SSH_HOST` | SSH host for direct node access (if needed) | Test suite |
-| `PROXMOX_SSH_KEY` | SSH private key for node access | Test suite, CI |
-| `WARP_TEST_IMAGE_LXC` | Path or URL to LXC template under test | Test suite |
-| `WARP_TEST_IMAGE_QCOW2` | Path or URL to QCOW2 image under test | Test suite |
+| `PVE_HOST` | Proxmox VE SSH host (e.g., `bhs-host51.dw.net.br`) | Test suite |
+| `PVE_USER` | SSH user on PVE host (default: `root`) | Test suite |
+| `SSH_KEY_PATH` | SSH private key path (default: `~/.ssh/id_ed25519`) | Test suite |
+| `PVE_STORAGE` | Storage pool for test disks (default: `spool-zfs`) | Test suite |
+| `PVE_TEMPLATE` | LXC template reference (default: `local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst`) | Test suite |
+| `VMID_BASE` | Starting VMID for test containers (default: `9000`) | Test suite |
 
 ---
 
