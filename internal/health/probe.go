@@ -37,15 +37,15 @@ func (s Status) String() string {
 
 // UplinkState holds the health state for a single WAN uplink.
 type UplinkState struct {
-	Name              string
-	Target            string
-	Status            Status
-	ConsecutiveFails  int
-	LastProbeTime     time.Time
-	LastSuccessTime   time.Time
-	LastLatency       time.Duration
-	TotalProbes       int64
-	TotalFailures     int64
+	Name             string
+	Target           string
+	Status           Status
+	ConsecutiveFails int
+	LastProbeTime    time.Time
+	LastSuccessTime  time.Time
+	LastLatency      time.Duration
+	TotalProbes      int64
+	TotalFailures    int64
 }
 
 // ProbeConfig configures the health probe for a WAN uplink.
@@ -180,8 +180,11 @@ func (p *Prober) doPing(cfg ProbeConfig) {
 		latency, err = icmpPing(cfg.Target, cfg.Timeout)
 	}
 
+	var nameForCallback string
+	var oldStatusForCallback, newStatusForCallback Status
+	var shouldCallback bool
+
 	p.mu.Lock()
-	defer p.mu.Unlock()
 
 	state := p.states[cfg.Name]
 	state.LastProbeTime = time.Now()
@@ -206,7 +209,16 @@ func (p *Prober) doPing(cfg ProbeConfig) {
 	}
 
 	if oldStatus != state.Status && p.OnStateChange != nil {
-		p.OnStateChange(cfg.Name, oldStatus, state.Status)
+		shouldCallback = true
+		nameForCallback = cfg.Name
+		oldStatusForCallback = oldStatus
+		newStatusForCallback = state.Status
+	}
+
+	p.mu.Unlock()
+
+	if shouldCallback {
+		p.OnStateChange(nameForCallback, oldStatusForCallback, newStatusForCallback)
 	}
 }
 

@@ -21,7 +21,7 @@ import (
 // 8. Counter-based verification of drop rules
 func TestNFTablesFirewall(t *testing.T) {
 	topo := testenv.NewTopology(t, testenv.TopologySpec{
-		RouterTemplate: "local:vztmpl/warp-router-dev-lxc-amd64.tar.zst",
+		RouterTemplate: testenv.WarpRouterTemplate,
 	})
 	topo.Setup(t)
 
@@ -62,19 +62,7 @@ dns:
     - 1.1.1.1
 `
 
-	// Apply config
-	err := topo.PVE.UploadFileToCT(routerVMID, "/etc/warp/site.yaml", siteConfig)
-	if err != nil {
-		t.Fatalf("uploading site config: %v", err)
-	}
-
-	out, err := topo.PVE.ExecCT(routerVMID, "/usr/local/bin/warp apply /etc/warp/site.yaml 2>&1")
-	if err != nil {
-		t.Fatalf("warp apply failed: %v\noutput: %s", err, out)
-	}
-	if !strings.Contains(out, "Apply complete") {
-		t.Fatalf("warp apply did not complete: %s", out)
-	}
+	topo.ApplyConfig(t, routerVMID, siteConfig)
 
 	t.Run("RulesetLoaded", func(t *testing.T) {
 		out, err := topo.PVE.ExecCT(routerVMID, "nft list ruleset 2>&1")

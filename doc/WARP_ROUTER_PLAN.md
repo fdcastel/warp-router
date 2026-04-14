@@ -343,3 +343,42 @@ Phase 9 (Hardening/Docs)
 - HA / clustering
 - Web UI
 - OCI registry publication (GitHub Releases only for v1)
+
+---
+
+## Phase 10 — Code Review — 2026-04-14
+
+> Full-codebase audit covering `cmd/`, `internal/`, `test/`, and `packaging/`.
+> Outcome: all actionable review items were implemented and validated; the QCOW2-specific item remains deferred because QCOW2 work itself is still deferred.
+
+### Resolution Summary
+
+| Item | Status | Resolution |
+|------|--------|------------|
+| CR-1 | ✅ RESOLVED | `warp apply` and `warp rollback` now save revisions only after a successful pipeline run. |
+| CR-2 | ✅ RESOLVED | Apply pipeline now backs up rendered config targets and restores them on failure. |
+| CR-3 | ✅ RESOLVED | Documented probe-based PBR failover as unsupported in v1; `vtysh` PBR methods now state the limitation explicitly. |
+| CR-4 | ✅ RESOLVED | `make test-integration` now runs from the `test/` module. |
+| CR-5 | ✅ RESOLVED | Health probe state-change callbacks now run after releasing the prober mutex. |
+| CR-6 | ✅ RESOLVED | Failover controller now logs ECMP/PBR update failures and reverts in-memory active state on ECMP errors. |
+| CR-7 | ✅ RESOLVED | YAML parsing now uses `KnownFields(true)` and rejects unknown keys. |
+| CR-8 | ✅ RESOLVED | Removed unsupported schema fields (`mtu`, `weight`, `table`) and aligned renderers/tests with the supported config model. |
+| CR-9 | ✅ RESOLVED | Unbound renderer now returns a disabled stub config when `dns.enabled: false`. |
+| CR-10 | ✅ RESOLVED | VLAN provisioning now reconciles addresses, creates missing VLANs, and removes stale subinterfaces. |
+| CR-11 | ✅ RESOLVED | Revision lookups now validate revision IDs before reading from disk. |
+| CR-12 | ✅ RESOLVED | Rootfs nftables overlay no longer allows forwarding before `warp apply` installs policy. |
+| CR-13 | ✅ RESOLVED | FRR renderer now merges PBR rules into a single attached map instead of silently dropping later maps. |
+| CR-14 | ✅ RESOLVED | DHCP validation now enforces pool bounds within the configured subnet. |
+| CR-15 | ⏯️ DEFERRED | QCOW2 GRUB-install hardening remains deferred until QCOW2 build/testing work resumes. |
+| CR-16 | ✅ RESOLVED | Added shared integration-test helpers for config apply, dummy WAN setup, template reuse, and polling. |
+| CR-17 | ✅ RESOLVED | `services_test.go` now uses the topology allocator instead of fixed VMIDs. |
+
+### Validation
+
+- `go test ./...`
+- `cd test && go test -tags integration -run '^$' ./integration/...`
+
+### Notes
+
+- Phase 10 is complete for all non-deferred items.
+- CR-15 stays deferred because QCOW2 image work is still blocked by the project-level environment constraint already documented elsewhere.

@@ -114,22 +114,6 @@ func cmdApply() {
 	}
 	defer unlock()
 
-	// Save revision
-	yamlData, err := os.ReadFile(path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading config file: %v\n", err)
-		os.Exit(1)
-	}
-
-	store := revision.NewStore(revision.DefaultStoreDir)
-	revID, err := store.Save(yamlData, "apply from "+path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to save revision: %v\n", err)
-		// Continue with apply even if revision save fails
-	} else {
-		fmt.Printf("Saved revision: %s\n", revID)
-	}
-
 	// Run apply pipeline
 	pipeline := apply.NewPipeline(&apply.SystemdReloader{})
 	result := pipeline.Execute(cfg)
@@ -141,6 +125,22 @@ func cmdApply() {
 	if result.Failed != "" {
 		fmt.Fprintf(os.Stderr, "  ✗ %s: %v\n", result.Failed, result.Err)
 		os.Exit(1)
+	}
+
+	// Save revision only after successful apply
+	yamlData, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading config file: %v\n", err)
+		os.Exit(1)
+	}
+
+	store := revision.NewStore(revision.DefaultStoreDir)
+	revID, err := store.Save(yamlData, "apply from "+path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to save revision: %v\n", err)
+		// Continue — apply already succeeded
+	} else {
+		fmt.Printf("Saved revision: %s\n", revID)
 	}
 
 	fmt.Println("Apply complete.")
@@ -178,12 +178,6 @@ func cmdRollback() {
 	}
 	defer unlock()
 
-	// Save as new revision (rollback is also a revision)
-	_, err = store.Save(content, "rollback to "+prevID)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to save rollback revision: %v\n", err)
-	}
-
 	// Apply
 	pipeline := apply.NewPipeline(&apply.SystemdReloader{})
 	result := pipeline.Execute(cfg)
@@ -195,6 +189,12 @@ func cmdRollback() {
 	if result.Failed != "" {
 		fmt.Fprintf(os.Stderr, "  ✗ %s: %v\n", result.Failed, result.Err)
 		os.Exit(1)
+	}
+
+	// Save as new revision only after successful rollback apply
+	_, err = store.Save(content, "rollback to "+prevID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to save rollback revision: %v\n", err)
 	}
 
 	fmt.Println("Rollback complete.")
@@ -323,14 +323,10 @@ func cmdMonitor() {
 		probeConfigs = append(probeConfigs, pc)
 
 		// Track initial route (already installed by warp apply + FRR)
-		weight := iface.Weight
-		if weight <= 0 {
-			weight = 1
-		}
 		initialRoutes = append(initialRoutes, failover.Nexthop{
 			Gateway: net.ParseIP(iface.Gateway),
 			Device:  iface.Device,
-			Weight:  weight,
+			Weight:  1,
 		})
 	}
 

@@ -10,6 +10,9 @@ import (
 	"time"
 )
 
+// WarpRouterTemplate is the standard template for warp-router integration tests.
+const WarpRouterTemplate = "local:vztmpl/warp-router-dev-lxc-amd64.tar.zst"
+
 // Topology represents a complete test environment on a Proxmox host.
 type Topology struct {
 	Config *Config
@@ -24,8 +27,8 @@ type Topology struct {
 	Containers []int
 
 	// Addresses assigned
-	RouterLANIP   string
-	ClientLANIP   string
+	RouterLANIP string
+	ClientLANIP string
 }
 
 // TopologySpec defines the desired test topology.
@@ -202,4 +205,104 @@ func (topo *Topology) Teardown(t *testing.T) {
 
 	// Clean up temp files
 	topo.PVE.Run("rm -rf /tmp/warp-test 2>/dev/null; true")
+}
+
+// ApplyConfig uploads a warp site config and requires a fully successful apply.
+func (topo *Topology) ApplyConfig(t *testing.T, vmid int, content string) string {
+	t.Helper()
+
+	if err := topo.PVE.UploadFileToCT(vmid, "/etc/warp/site.yaml", content); err != nil {
+		t.Fatalf("uploading site config: %v", err)
+	}
+
+	out, err := topo.PVE.ExecCT(vmid, "/usr/local/bin/warp apply /etc/warp/site.yaml 2>&1")
+	if err != nil {
+		t.Fatalf("warp apply failed: %v\noutput: %s", err, out)
+	}
+	if !strings.Contains(out, "Apply complete") {
+		t.Fatalf("warp apply did not complete: %s", out)
+	}
+	return out
+}
+
+// ApplyConfigAllowPartial uploads a warp site config and allows a partial apply
+// when the command output contains all required markers.
+func (topo *Topology) ApplyConfigAllowPartial(t *testing.T, vmid int, content string, requiredMarkers ...string) string {
+	t.Helper()
+
+	if err := topo.PVE.UploadFileToCT(vmid, "/etc/warp/site.yaml", content); err != nil {
+		t.Fatalf("uploading site config: %v", err)
+	}
+
+	out, err := topo.PVE.ExecCT(vmid, "/usr/local/bin/warp apply /etc/warp/site.yaml 2>&1")
+	if err != nil {
+		for _, marker := range requiredMarkers {
+			if !strings.Contains(out, marker) {
+				t.Fatalf("warp apply failed critically: %v\noutput: %s", err, out)
+			}
+		}
+		return out
+	}
+	if !strings.Contains(out, "Apply complete") {
+		t.Fatalf("warp apply did not complete: %s", out)
+	}
+	return out
+}
+
+// RunCTCommands executes a sequence of shell commands inside a container.
+func (topo *Topology) RunCTCommands(t *testing.T, vmid int, cmds ...string) {
+	t.Helper()
+
+	for _, cmd := range cmds {
+		if _, err := topo.PVE.ExecCT(vmid, cmd); err != nil {
+			t.Fatalf("executing %q in CT %d: %v", cmd, vmid, err)
+		}
+	}
+}
+
+// CreateDummyWANPair creates the standard dual-WAN dummy interfaces used by
+// ECMP, failover, and PBR integration tests.
+func (topo *Topology) CreateDummyWANPair(t *testing.T, vmid int) {
+	t.Helper()
+	topo.RunCTCommands(
+		t,
+		vmid,
+		"ip link add dummy1 type dummy && ip link set dummy1 up && ip addr add 198.51.100.1/24 dev dummy1",
+		"ip link add dummy2 type dummy && ip link set dummy2 up && ip addr add 203.0.113.1/24 dev dummy2",
+	)
+}
+
+// CreateDummyWANPairWithGatewayIPs creates the standard dual-WAN dummy setup
+// where the probe targets are secondary local IPs on each interface.
+func (topo *Topology) CreateDummyWANPairWithGatewayIPs(t *testing.T, vmid int) {
+	t.Helper()
+	topo.RunCTCommands(
+		t,
+		vmid,
+		"ip link add dummy1 type dummy && ip link set dummy1 up",
+		"ip addr add 198.51.100.1/24 dev dummy1",
+		"ip addr add 198.51.100.254/24 dev dummy1",
+		"ip link add dummy2 type dummy && ip link set dummy2 up",
+		"ip addr add 203.0.113.1/24 dev dummy2",
+		"ip addr add 203.0.113.254/24 dev dummy2",
+	)
+}
+
+// WaitForCondition polls until the callback reports success or the timeout expires.
+func WaitForCondition(t *testing.T, timeout, interval time.Duration, fn func() (bool, string, error)) string {
+	t.Helper()
+
+	deadline := time.Now().Add(timeout)
+	lastOutput := ""
+	for time.Now().Before(deadline) {
+		ok, output, err := fn()
+		if err == nil {
+			lastOutput = output
+			if ok {
+				return output
+			}
+		}
+		time.Sleep(interval)
+	}
+	return lastOutput
 }

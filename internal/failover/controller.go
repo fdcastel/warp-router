@@ -2,6 +2,7 @@ package failover
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"sync"
 
@@ -53,7 +54,6 @@ type uplinkInfo struct {
 	Name    string
 	Gateway net.IP
 	Device  string
-	Weight  int
 }
 
 // NewController creates a failover controller.
@@ -70,15 +70,10 @@ func NewController(cfg *config.SiteConfig, routes RouteManager, prober *health.P
 	// Index WAN uplinks
 	for _, iface := range cfg.Interfaces {
 		if iface.Role == "wan" && iface.Gateway != "" {
-			weight := iface.Weight
-			if weight <= 0 {
-				weight = 1
-			}
 			c.uplinks[iface.Name] = uplinkInfo{
 				Name:    iface.Name,
 				Gateway: net.ParseIP(iface.Gateway),
 				Device:  iface.Device,
-				Weight:  weight,
 			}
 			c.active[iface.Name] = true // start as active
 		}
@@ -146,7 +141,11 @@ func (c *Controller) deactivateUplink(name string) {
 		return
 	}
 	c.active[name] = false
-	c.updateECMP()
+	if err := c.updateECMP(); err != nil {
+		log.Printf("failover: error updating ECMP after deactivating %s: %v", name, err)
+		c.active[name] = true // revert in-memory state
+		return
+	}
 
 	// Remove PBR rules targeting this uplink
 	info, ok := c.uplinks[name]
@@ -155,7 +154,9 @@ func (c *Controller) deactivateUplink(name string) {
 	}
 	for _, rule := range c.pbrRules {
 		if rule.Device == info.Device {
-			c.routes.DelPBRRule(rule)
+			if err := c.routes.DelPBRRule(rule); err != nil {
+				log.Printf("failover: error removing PBR rule %s: %v", rule.Name, err)
+			}
 		}
 	}
 }
@@ -165,7 +166,11 @@ func (c *Controller) activateUplink(name string) {
 		return
 	}
 	c.active[name] = true
-	c.updateECMP()
+	if err := c.updateECMP(); err != nil {
+		log.Printf("failover: error updating ECMP after activating %s: %v", name, err)
+		c.active[name] = false // revert in-memory state
+		return
+	}
 
 	// Restore PBR rules targeting this uplink
 	info, ok := c.uplinks[name]
@@ -174,7 +179,9 @@ func (c *Controller) activateUplink(name string) {
 	}
 	for _, rule := range c.pbrRules {
 		if rule.Device == info.Device {
-			c.routes.AddPBRRule(rule)
+			if err := c.routes.AddPBRRule(rule); err != nil {
+				log.Printf("failover: error adding PBR rule %s: %v", rule.Name, err)
+			}
 		}
 	}
 }
@@ -186,7 +193,7 @@ func (c *Controller) updateECMP() error {
 			nexthops = append(nexthops, Nexthop{
 				Gateway: info.Gateway,
 				Device:  info.Device,
-				Weight:  info.Weight,
+				Weight:  1,
 			})
 		}
 	}

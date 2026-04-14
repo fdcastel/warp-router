@@ -18,7 +18,7 @@ import (
 // Maps to SC-003: WAN failover via probe-based detection.
 func TestWANProbeFailover(t *testing.T) {
 	topo := testenv.NewTopology(t, testenv.TopologySpec{
-		RouterTemplate: "local:vztmpl/warp-router-dev-lxc-amd64.tar.zst",
+		RouterTemplate: testenv.WarpRouterTemplate,
 	})
 	topo.Setup(t)
 
@@ -65,41 +65,13 @@ dns:
     - 1.1.1.1
 `
 
-	// Create dummy interfaces and add "gateway" addresses that respond to ping.
-	// The gateway is just a secondary local address on the dummy interface.
-	cmds := []string{
-		"ip link add dummy1 type dummy && ip link set dummy1 up",
-		"ip addr add 198.51.100.1/24 dev dummy1",
-		"ip addr add 198.51.100.254/24 dev dummy1",
-		"ip link add dummy2 type dummy && ip link set dummy2 up",
-		"ip addr add 203.0.113.1/24 dev dummy2",
-		"ip addr add 203.0.113.254/24 dev dummy2",
-	}
-	for _, cmd := range cmds {
-		_, err := topo.PVE.ExecCT(routerVMID, cmd)
-		if err != nil {
-			t.Fatalf("setting up dummy interfaces: %v", err)
-		}
-	}
+	topo.CreateDummyWANPairWithGatewayIPs(t, routerVMID)
 
-	// Apply config
-	err := topo.PVE.UploadFileToCT(routerVMID, "/etc/warp/site.yaml", siteConfig)
-	if err != nil {
-		t.Fatalf("uploading site config: %v", err)
-	}
-
-	out, err := topo.PVE.ExecCT(routerVMID, "/usr/local/bin/warp apply /etc/warp/site.yaml 2>&1")
-	if err != nil {
-		if !strings.Contains(out, "frr") || !strings.Contains(out, "nftables") {
-			t.Fatalf("warp apply failed critically: %v\noutput: %s", err, out)
-		}
-		t.Logf("warp apply partial: %s", out)
-	} else {
-		t.Logf("warp apply: %s", out)
-	}
+	out := topo.ApplyConfigAllowPartial(t, routerVMID, siteConfig, "frr", "nftables")
+	t.Logf("warp apply output: %s", out)
 
 	// Verify both nexthops present before starting monitor
-	out, err = topo.PVE.ExecCT(routerVMID, "vtysh -c 'show ip route' 2>&1")
+	out, err := topo.PVE.ExecCT(routerVMID, "vtysh -c 'show ip route' 2>&1")
 	if err != nil {
 		t.Fatalf("vtysh: %v\n%s", err, out)
 	}

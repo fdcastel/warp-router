@@ -29,7 +29,7 @@ test:
 
 ## Run integration tests (requires Proxmox env vars)
 test-integration:
-	go test -tags integration -timeout 30m ./test/integration/...
+	cd test && go test -tags integration -timeout 30m ./integration/...
 
 ## Remove build artifacts
 clean:

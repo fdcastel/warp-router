@@ -92,9 +92,29 @@ func TestGetNonexistent(t *testing.T) {
 	dir := t.TempDir()
 	store := NewStore(dir)
 
-	_, _, err := store.Get("nonexistent")
+	_, _, err := store.Get("20260101T000000Z")
 	if err == nil {
 		t.Fatal("expected error for nonexistent revision")
+	}
+}
+
+func TestGetRejectsPathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	cases := []string{
+		"../../etc/shadow",
+		"../secret",
+		"20260101T000000Z/../../etc/passwd",
+		"",
+		"hello world",
+		"abc",
+	}
+	for _, id := range cases {
+		_, _, err := store.Get(id)
+		if err == nil {
+			t.Errorf("expected error for crafted ID %q", id)
+		}
 	}
 }
 

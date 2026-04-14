@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"time"
 )
@@ -128,8 +129,15 @@ func (s *Store) List() ([]Metadata, error) {
 	return revisions, nil
 }
 
+// validRevisionID matches revision IDs like "20260102T150405Z" or "20260102T150405Z-02".
+var validRevisionID = regexp.MustCompile(`^[0-9]{8}T[0-9]{6}Z(-[0-9]{2})?$`)
+
 // Get retrieves a specific revision's config content.
 func (s *Store) Get(id string) ([]byte, *Metadata, error) {
+	if !validRevisionID.MatchString(id) {
+		return nil, nil, fmt.Errorf("invalid revision ID %q", id)
+	}
+
 	revDir := filepath.Join(s.Dir, id)
 	if _, err := os.Stat(revDir); err != nil {
 		return nil, nil, fmt.Errorf("revision %q not found", id)

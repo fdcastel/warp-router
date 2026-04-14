@@ -39,7 +39,7 @@ func TestLXCImageLifecycle(t *testing.T) {
 	err = pve.CreateCT(testenv.CTSpec{
 		VMID:     vmid,
 		Hostname: "warp-lifecycle",
-		Template: "local:vztmpl/warp-router-dev-lxc-amd64.tar.zst",
+		Template: testenv.WarpRouterTemplate,
 		Storage:  cfg.StoragePool,
 		Cores:    1,
 		MemoryMB: 512,

@@ -1,6 +1,7 @@
 package failover
 
 import (
+	"fmt"
 	"net"
 	"sort"
 	"testing"
@@ -35,8 +36,8 @@ func dualWANCfg() *config.SiteConfig {
 	return &config.SiteConfig{
 		Hostname: "r1",
 		Interfaces: []config.Interface{
-			{Name: "wan1", Role: "wan", Device: "eth0", Address: "dhcp", Gateway: "10.0.0.1", Weight: 1},
-			{Name: "wan2", Role: "wan", Device: "eth1", Address: "203.0.113.2/30", Gateway: "203.0.113.1", Weight: 1},
+			{Name: "wan1", Role: "wan", Device: "eth0", Address: "dhcp", Gateway: "10.0.0.1"},
+			{Name: "wan2", Role: "wan", Device: "eth1", Address: "203.0.113.2/30", Gateway: "203.0.113.1"},
 			{Name: "lan1", Role: "lan", Device: "eth2", Address: "192.168.1.1/24"},
 		},
 	}
@@ -236,3 +237,43 @@ func TestNexthopEquality(t *testing.T) {
 		t.Errorf("gateway = %s, want 10.0.0.1", nh.Gateway)
 	}
 }
+
+func TestControllerRevertsActiveOnECMPError(t *testing.T) {
+	routes := &failingRouteManager{failECMP: true}
+	prober := health.NewProber()
+	cfg := dualWANCfg()
+
+	ctrl := NewController(cfg, routes, prober)
+	// Install initial routes succeeds (before failECMP is set)
+	routes.failECMP = false
+	if err := ctrl.InstallInitialRoutes(); err != nil {
+		t.Fatalf("InstallInitialRoutes: %v", err)
+	}
+
+	// Now make ECMP fail
+	routes.failECMP = true
+
+	// Deactivate should revert active state on error
+	ctrl.HandleStateChange("wan1", health.StatusHealthy, health.StatusDown)
+
+	active := ctrl.ActiveUplinks()
+	sort.Strings(active)
+	if len(active) != 2 {
+		t.Errorf("active uplinks = %v, want both (ECMP failed, should revert)", active)
+	}
+}
+
+// failingRouteManager is a route manager that can simulate ECMP failures.
+type failingRouteManager struct {
+	failECMP bool
+}
+
+func (f *failingRouteManager) ReplaceECMPRoute(nexthops []Nexthop) error {
+	if f.failECMP {
+		return fmt.Errorf("simulated ECMP failure")
+	}
+	return nil
+}
+
+func (f *failingRouteManager) AddPBRRule(rule PBRRule) error { return nil }
+func (f *failingRouteManager) DelPBRRule(rule PBRRule) error { return nil }

@@ -19,7 +19,7 @@ log syslog informational
 service integrated-vtysh-config
 !
 {{- range .StaticRoutes }}
-ip route {{ .Prefix }} {{ .NextHop }}{{ if .Device }} {{ .Device }}{{ end }}{{ if .Table }} table {{ .Table }}{{ end }}
+ip route {{ .Prefix }} {{ .NextHop }}{{ if .Device }} {{ .Device }}{{ end }}
 {{- end }}
 !
 {{- if .ECMP }}
@@ -61,28 +61,26 @@ line vty
 `
 
 type frrData struct {
-	Hostname     string
-	StaticRoutes []staticRoute
-	ECMP         bool
-	ECMPNextHops []ecmpNextHop
-	PBR          bool
-	PBRMaps      []pbrMap
+	Hostname      string
+	StaticRoutes  []staticRoute
+	ECMP          bool
+	ECMPNextHops  []ecmpNextHop
+	PBR           bool
+	PBRMaps       []pbrMap
 	PBRInterfaces []pbrInterface
-	BFD          bool
-	BFDPeers     []bfdPeer
+	BFD           bool
+	BFDPeers      []bfdPeer
 }
 
 type staticRoute struct {
 	Prefix  string
 	NextHop string
 	Device  string
-	Table   string
 }
 
 type ecmpNextHop struct {
 	NextHop string
 	Device  string
-	Weight  int
 }
 
 type pbrMap struct {
@@ -127,14 +125,9 @@ func Render(cfg *config.SiteConfig) (string, error) {
 		data.ECMP = true
 		for _, wan := range wanInterfaces {
 			if wan.Gateway != "" {
-				weight := wan.Weight
-				if weight <= 0 {
-					weight = 1
-				}
 				data.ECMPNextHops = append(data.ECMPNextHops, ecmpNextHop{
 					NextHop: wan.Gateway,
 					Device:  wan.Device,
-					Weight:  weight,
 				})
 			}
 		}
@@ -151,16 +144,11 @@ func Render(cfg *config.SiteConfig) (string, error) {
 		}
 	}
 
-	// PBR rules
+	// PBR rules — merge all rules into a single pbr-map "warp-pbr"
+	// (FRR supports only one pbr-policy per interface)
 	if len(cfg.PBR) > 0 {
 		data.PBR = true
-		// Find LAN interfaces to attach PBR policies
-		lanDevices := make(map[string]bool)
-		for _, iface := range cfg.Interfaces {
-			if iface.Role == "lan" {
-				lanDevices[iface.Device] = true
-			}
-		}
+		const pbrMapName = "warp-pbr"
 
 		for i, rule := range cfg.PBR {
 			targetIface, ok := ifaceByName[rule.Interface]
@@ -168,7 +156,7 @@ func Render(cfg *config.SiteConfig) (string, error) {
 				continue
 			}
 			data.PBRMaps = append(data.PBRMaps, pbrMap{
-				Name:     rule.Name,
+				Name:     pbrMapName,
 				Seq:      (i + 1) * 10,
 				MatchSrc: rule.Source,
 				NextHop:  targetIface.Gateway,
@@ -176,16 +164,13 @@ func Render(cfg *config.SiteConfig) (string, error) {
 			})
 		}
 
-		// Attach PBR policy to LAN interfaces
+		// Attach the single PBR map to all LAN interfaces
 		for _, iface := range cfg.Interfaces {
-			if iface.Role == "lan" {
-				// Attach first PBR map name (FRR supports one pbr-policy per iface)
-				if len(data.PBRMaps) > 0 {
-					data.PBRInterfaces = append(data.PBRInterfaces, pbrInterface{
-						Device:  iface.Device,
-						MapName: data.PBRMaps[0].Name,
-					})
-				}
+			if iface.Role == "lan" && len(data.PBRMaps) > 0 {
+				data.PBRInterfaces = append(data.PBRInterfaces, pbrInterface{
+					Device:  iface.Device,
+					MapName: pbrMapName,
+				})
 			}
 		}
 	}

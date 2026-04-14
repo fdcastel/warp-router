@@ -67,12 +67,17 @@ func (m *VtyshRouteManager) ReplaceECMPRoute(nexthops []Nexthop) error {
 	return nil
 }
 
-// AddPBRRule is a no-op for vtysh — PBR is managed by frr.conf via warp apply.
+// AddPBRRule is a no-op — probe-based PBR failover is not yet supported.
+// PBR maps are statically configured in frr.conf via warp apply.
+// When a WAN fails probe checks but the link remains up, PBR rules still
+// steer traffic toward the dead WAN. This is a known v1 limitation.
+// FRR's NHT (nexthop tracking) handles carrier-loss failover natively.
 func (m *VtyshRouteManager) AddPBRRule(rule PBRRule) error {
 	return nil
 }
 
-// DelPBRRule is a no-op for vtysh — PBR is managed by frr.conf via warp apply.
+// DelPBRRule is a no-op — probe-based PBR failover is not yet supported.
+// See AddPBRRule for details on this v1 limitation.
 func (m *VtyshRouteManager) DelPBRRule(rule PBRRule) error {
 	return nil
 }

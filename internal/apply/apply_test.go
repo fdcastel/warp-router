@@ -272,3 +272,102 @@ func TestParentDevice(t *testing.T) {
 		}
 	}
 }
+
+func TestPipelineRestoresBackupsOnFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	frrPath := filepath.Join(tmpDir, "frr.conf")
+	nftPath := filepath.Join(tmpDir, "nftables.conf")
+
+	// Pre-populate config files with "original" content
+	os.WriteFile(frrPath, []byte("original frr\n"), 0644)
+	os.WriteFile(nftPath, []byte("original nft\n"), 0644)
+
+	reloader := &mockReloader{failOn: "nftables"}
+
+	pipeline := &Pipeline{
+		Reloader: reloader,
+		Steps: []Step{
+			{
+				Name:       "frr",
+				ConfigPath: frrPath,
+				Render: func(cfg *config.SiteConfig) (string, error) {
+					return "new frr\n", nil
+				},
+				Service: "frr",
+			},
+			{
+				Name:       "nftables",
+				ConfigPath: nftPath,
+				Render: func(cfg *config.SiteConfig) (string, error) {
+					return "new nft\n", nil
+				},
+				Service: "nftables",
+			},
+		},
+	}
+
+	cfg := testConfig()
+	result := pipeline.Execute(cfg)
+
+	if result.Failed != "nftables" {
+		t.Fatalf("expected failure on nftables, got %q", result.Failed)
+	}
+
+	// Both files should be restored to original content
+	frrData, _ := os.ReadFile(frrPath)
+	if string(frrData) != "original frr\n" {
+		t.Errorf("frr.conf = %q, want %q (should have been restored)", string(frrData), "original frr\n")
+	}
+
+	nftData, _ := os.ReadFile(nftPath)
+	if string(nftData) != "original nft\n" {
+		t.Errorf("nftables.conf = %q, want %q (should have been restored)", string(nftData), "original nft\n")
+	}
+
+	// Backup files should be cleaned up
+	if _, err := os.Stat(frrPath + ".warp-backup"); err == nil {
+		t.Error("frr backup file should have been cleaned up after restore")
+	}
+	if _, err := os.Stat(nftPath + ".warp-backup"); err == nil {
+		t.Error("nft backup file should have been cleaned up after restore")
+	}
+}
+
+func TestPipelineRemovesBackupsOnSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	confPath := filepath.Join(tmpDir, "test.conf")
+
+	// Pre-populate
+	os.WriteFile(confPath, []byte("original\n"), 0644)
+
+	reloader := &mockReloader{}
+	pipeline := &Pipeline{
+		Reloader: reloader,
+		Steps: []Step{
+			{
+				Name:       "test",
+				ConfigPath: confPath,
+				Render: func(cfg *config.SiteConfig) (string, error) {
+					return "new\n", nil
+				},
+				Service: "test-svc",
+			},
+		},
+	}
+
+	result := pipeline.Execute(testConfig())
+	if result.Failed != "" {
+		t.Fatalf("unexpected failure: %s: %v", result.Failed, result.Err)
+	}
+
+	// Backup should be cleaned up
+	if _, err := os.Stat(confPath + ".warp-backup"); err == nil {
+		t.Error("backup file should have been removed on success")
+	}
+
+	// Config should have new content
+	data, _ := os.ReadFile(confPath)
+	if string(data) != "new\n" {
+		t.Errorf("content = %q, want %q", string(data), "new\n")
+	}
+}

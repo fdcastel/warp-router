@@ -46,7 +46,6 @@ interfaces:
     device: eth0
     address: dhcp
     gateway: 10.0.0.1
-    weight: 1
     health_check:
       target: 8.8.8.8
       interval: 1
@@ -57,7 +56,6 @@ interfaces:
     device: eth1
     address: 203.0.113.2/30
     gateway: 203.0.113.1
-    weight: 1
     health_check:
       target: 1.1.1.1
   - name: lan1
@@ -69,7 +67,6 @@ interfaces:
     device: eth3.100
     address: 10.10.0.1/24
     vlan: 100
-    mtu: 1500
 dhcp:
   enabled: true
   subnets:
@@ -116,7 +113,6 @@ pbr:
     priority: 100
     source: 10.10.0.0/24
     interface: wan2
-    table: 200
 sysctl:
   conntrack_max: 524288
 `
@@ -229,5 +225,45 @@ func TestParseInvalidYAML(t *testing.T) {
 	_, err := Parse([]byte("{{{{invalid yaml"))
 	if err == nil {
 		t.Fatal("expected error for invalid YAML")
+	}
+}
+
+func TestParseRejectsUnknownKeys(t *testing.T) {
+	yaml := `
+hostname: router01
+interfaces:
+  - name: wan1
+    role: wan
+    device: eth0
+    address: dhcp
+  - name: lan1
+    role: lan
+    device: eth1
+    address: 192.168.1.1/24
+unknownfield: true
+`
+	_, err := Parse([]byte(yaml))
+	if err == nil {
+		t.Fatal("expected error for unknown key 'unknownfield'")
+	}
+}
+
+func TestParseRejectsUnknownNestedKeys(t *testing.T) {
+	yaml := `
+hostname: router01
+interfaces:
+  - name: wan1
+    role: wan
+    device: eth0
+    address: dhcp
+    typo_field: something
+  - name: lan1
+    role: lan
+    device: eth1
+    address: 192.168.1.1/24
+`
+	_, err := Parse([]byte(yaml))
+	if err == nil {
+		t.Fatal("expected error for unknown nested key 'typo_field'")
 	}
 }

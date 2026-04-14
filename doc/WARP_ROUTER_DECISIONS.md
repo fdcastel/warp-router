@@ -140,6 +140,10 @@
 **Decision**: Implement probe-driven route changes using `VtyshRouteManager` and FRR `ip route` add/remove commands, not direct netlink route replacement.  
 **Rationale**: FRR zebra owns the routing table in this architecture. Netlink route replacement from an external controller causes ownership races/conflicts. Driving route mutations through FRR keeps control-plane consistency and avoids route churn.
 
+### AD-016: Integration Tests Use Shared Topology Helpers (2026-04-14)
+**Decision**: Centralize common integration-test setup in `testenv` helpers instead of duplicating template names, config-apply blocks, dummy-WAN setup, and polling loops in individual test files.  
+**Rationale**: Phase 10 surfaced repeated test bugs caused by copy-pasted setup code and fixed VMID allocation. Moving these patterns behind `Topology` helpers keeps tests aligned with the supported config schema, reduces drift, and makes future integration fixes cheaper.
+
 ### LL-013: Revision IDs Collide Under Fast Apply/Rollback (2026-04-14)
 **Context**: Full integration suite intermittently failed `TestConfigRollback` expecting 3 revisions but finding 2.  
 **Problem**: Revision IDs were second-granularity timestamps (`YYYYMMDDTHHMMSSZ`). Multiple saves in the same second overwrote the same revision directory.  
@@ -149,3 +153,8 @@
 **Context**: Fixed-VMID integration tests (`9060+`) were flaky in full-suite runs.  
 **Problem**: Destroy helper returned success even when container metadata/disk still existed after retries. Subsequent create failed with "CT already exists."  
 **Resolution**: Hardened `DestroyCT` to verify absence of `pct config`, and if needed perform forced ZFS subvolume + CT config cleanup before returning.
+
+### LL-015: Strict YAML Parsing Exposes Test Drift Immediately (2026-04-14)
+**Context**: Enabling `yaml.Decoder.KnownFields(true)` caused the integration compile/validation pass to surface stale test configs.  
+**Problem**: Some integration tests were still generating removed or unsupported fields (`weight`, `default_route`, ad-hoc health sections, old PBR expectations). Those configs had been tolerated only because unknown YAML keys were silently ignored.  
+**Resolution**: Keep strict parsing enabled and treat test-fixture updates as part of schema changes. The stricter parser caught real drift that would otherwise hide dead config fields.

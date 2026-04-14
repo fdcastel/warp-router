@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 
@@ -27,8 +28,6 @@ type Interface struct {
 	Address string `yaml:"address"` // CIDR notation (e.g. "192.168.1.1/24") or "dhcp"
 	Gateway string `yaml:"gateway,omitempty"`
 	VLAN    int    `yaml:"vlan,omitempty"` // 802.1Q VLAN ID (0 = untagged)
-	Weight  int    `yaml:"weight,omitempty"`
-	MTU     int    `yaml:"mtu,omitempty"`
 
 	// WAN health check
 	HealthCheck *HealthCheck `yaml:"health_check,omitempty"`
@@ -37,24 +36,24 @@ type Interface struct {
 // HealthCheck configures WAN uplink health monitoring.
 type HealthCheck struct {
 	Target   string `yaml:"target"`             // IP to probe (default: gateway)
-	Interval int    `yaml:"interval,omitempty"`  // Probe interval in seconds (default: 1)
-	Timeout  int    `yaml:"timeout,omitempty"`   // Probe timeout in seconds (default: 2)
-	Failures int    `yaml:"failures,omitempty"`  // Consecutive failures before marking down (default: 3)
+	Interval int    `yaml:"interval,omitempty"` // Probe interval in seconds (default: 1)
+	Timeout  int    `yaml:"timeout,omitempty"`  // Probe timeout in seconds (default: 2)
+	Failures int    `yaml:"failures,omitempty"` // Consecutive failures before marking down (default: 3)
 }
 
 // DHCPConfig configures the Kea DHCPv4 server.
 type DHCPConfig struct {
-	Enabled bool       `yaml:"enabled"`
+	Enabled bool         `yaml:"enabled"`
 	Subnets []DHCPSubnet `yaml:"subnets"`
 }
 
 // DHCPSubnet defines a DHCP scope for a LAN segment.
 type DHCPSubnet struct {
-	Subnet     string            `yaml:"subnet"`      // CIDR (e.g. "192.168.1.0/24")
-	Interface  string            `yaml:"interface"`    // Interface name from interfaces list
-	PoolStart  string            `yaml:"pool_start"`   // First IP in pool
-	PoolEnd    string            `yaml:"pool_end"`     // Last IP in pool
-	Gateway    string            `yaml:"gateway"`      // Default gateway for clients
+	Subnet     string            `yaml:"subnet"`     // CIDR (e.g. "192.168.1.0/24")
+	Interface  string            `yaml:"interface"`  // Interface name from interfaces list
+	PoolStart  string            `yaml:"pool_start"` // First IP in pool
+	PoolEnd    string            `yaml:"pool_end"`   // Last IP in pool
+	Gateway    string            `yaml:"gateway"`    // Default gateway for clients
 	DNSServers []string          `yaml:"dns_servers,omitempty"`
 	LeaseTime  int               `yaml:"lease_time,omitempty"` // Seconds (default: 3600)
 	Options    map[string]string `yaml:"options,omitempty"`
@@ -95,7 +94,7 @@ type ForwardRule struct {
 // InputRule defines a rule for traffic destined to the router itself.
 type InputRule struct {
 	Zone     string `yaml:"zone"`
-	Action   string `yaml:"action"`             // "accept" or "drop"
+	Action   string `yaml:"action"` // "accept" or "drop"
 	Protocol string `yaml:"protocol,omitempty"`
 	Port     string `yaml:"port,omitempty"`
 	Source   string `yaml:"source,omitempty"`
@@ -112,7 +111,6 @@ type PBRRule struct {
 	Priority  int    `yaml:"priority"`            // ip rule priority (lower = higher precedence)
 	Source    string `yaml:"source,omitempty"`    // Source CIDR to match
 	Interface string `yaml:"interface,omitempty"` // Target WAN interface name
-	Table     int    `yaml:"table,omitempty"`     // Routing table number
 }
 
 // Sysctl allows overriding default sysctl settings.
@@ -132,7 +130,9 @@ func LoadFile(path string) (*SiteConfig, error) {
 // Parse parses YAML bytes into a SiteConfig.
 func Parse(data []byte) (*SiteConfig, error) {
 	var cfg SiteConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("parsing YAML: %w", err)
 	}
 	return &cfg, nil

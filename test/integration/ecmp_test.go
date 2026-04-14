@@ -15,7 +15,7 @@ import (
 // requires real forwarding which is limited in LXC.
 func TestECMPDistribution(t *testing.T) {
 	topo := testenv.NewTopology(t, testenv.TopologySpec{
-		RouterTemplate: "local:vztmpl/warp-router-dev-lxc-amd64.tar.zst",
+		RouterTemplate: testenv.WarpRouterTemplate,
 	})
 	topo.Setup(t)
 
@@ -42,28 +42,6 @@ interfaces:
 
 ecmp:
   enabled: true
-  default_route:
-    nexthops:
-      - gateway: 198.51.100.254
-        interface: wan1
-        weight: 1
-      - gateway: 203.0.113.254
-        interface: wan2
-        weight: 1
-
-health:
-  enabled: true
-  targets:
-    - interface: wan1
-      target: 198.51.100.254
-      interval: 1
-      timeout: 1
-      threshold: 3
-    - interface: wan2
-      target: 203.0.113.254
-      interval: 1
-      timeout: 1
-      threshold: 3
 
 dns:
   enabled: true
@@ -73,36 +51,10 @@ dns:
     - 1.1.1.1
 `
 
-	// Create dummy interfaces for the two WANs and assign IPs
-	cmds := []string{
-		"ip link add dummy1 type dummy && ip link set dummy1 up && ip addr add 198.51.100.1/24 dev dummy1",
-		"ip link add dummy2 type dummy && ip link set dummy2 up && ip addr add 203.0.113.1/24 dev dummy2",
-	}
-	for _, cmd := range cmds {
-		_, err := topo.PVE.ExecCT(routerVMID, cmd)
-		if err != nil {
-			t.Fatalf("setting up dummy interfaces: %v", err)
-		}
-	}
+	topo.CreateDummyWANPair(t, routerVMID)
 
-	// Apply config
-	err := topo.PVE.UploadFileToCT(routerVMID, "/etc/warp/site.yaml", siteConfig)
-	if err != nil {
-		t.Fatalf("uploading site config: %v", err)
-	}
-
-	out, err := topo.PVE.ExecCT(routerVMID, "/usr/local/bin/warp apply /etc/warp/site.yaml 2>&1")
-	if err != nil {
-		// Accept partial success — unbound may fail to reload in LXC with dummy interfaces
-		if !strings.Contains(out, "frr") || !strings.Contains(out, "nftables") {
-			t.Fatalf("warp apply failed critically: %v\noutput: %s", err, out)
-		}
-		t.Logf("warp apply partial: %s", out)
-	} else if !strings.Contains(out, "Apply complete") {
-		t.Fatalf("warp apply did not complete: %s", out)
-	} else {
-		t.Logf("warp apply: %s", out)
-	}
+	out := topo.ApplyConfigAllowPartial(t, routerVMID, siteConfig, "frr", "nftables")
+	t.Logf("warp apply output: %s", out)
 
 	t.Run("FRRConfigHasECMP", func(t *testing.T) {
 		out, err := topo.PVE.ExecCT(routerVMID, "cat /etc/frr/frr.conf 2>&1")

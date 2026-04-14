@@ -88,10 +88,6 @@ func (c *SiteConfig) validateInterfaces() []error {
 		if iface.VLAN > 0 && !strings.Contains(iface.Device, ".") {
 			errs = append(errs, fmt.Errorf("%s (%s): VLAN interfaces must use dotted device name (e.g., eth0.%d)", prefix, iface.Name, iface.VLAN))
 		}
-
-		if iface.MTU != 0 && (iface.MTU < 576 || iface.MTU > 9000) {
-			errs = append(errs, fmt.Errorf("%s (%s): MTU must be 576-9000, got %d", prefix, iface.Name, iface.MTU))
-		}
 	}
 
 	if !hasWAN {
@@ -143,8 +139,11 @@ func (c *SiteConfig) validateDHCP() []error {
 	for i, sub := range c.DHCP.Subnets {
 		prefix := fmt.Sprintf("dhcp.subnets[%d]", i)
 
-		if _, _, err := net.ParseCIDR(sub.Subnet); err != nil {
+		var subnetNet *net.IPNet
+		if _, parsed, err := net.ParseCIDR(sub.Subnet); err != nil {
 			errs = append(errs, fmt.Errorf("%s: invalid subnet CIDR %q: %v", prefix, sub.Subnet, err))
+		} else {
+			subnetNet = parsed
 		}
 
 		if sub.Interface != "" && !ifaceNames[sub.Interface] {
@@ -153,14 +152,18 @@ func (c *SiteConfig) validateDHCP() []error {
 
 		if sub.PoolStart == "" {
 			errs = append(errs, fmt.Errorf("%s: pool_start is required", prefix))
-		} else if net.ParseIP(sub.PoolStart) == nil {
+		} else if ip := net.ParseIP(sub.PoolStart); ip == nil {
 			errs = append(errs, fmt.Errorf("%s: invalid pool_start IP %q", prefix, sub.PoolStart))
+		} else if subnetNet != nil && !subnetNet.Contains(ip) {
+			errs = append(errs, fmt.Errorf("%s: pool_start %s is outside subnet %s", prefix, sub.PoolStart, sub.Subnet))
 		}
 
 		if sub.PoolEnd == "" {
 			errs = append(errs, fmt.Errorf("%s: pool_end is required", prefix))
-		} else if net.ParseIP(sub.PoolEnd) == nil {
+		} else if ip := net.ParseIP(sub.PoolEnd); ip == nil {
 			errs = append(errs, fmt.Errorf("%s: invalid pool_end IP %q", prefix, sub.PoolEnd))
+		} else if subnetNet != nil && !subnetNet.Contains(ip) {
+			errs = append(errs, fmt.Errorf("%s: pool_end %s is outside subnet %s", prefix, sub.PoolEnd, sub.Subnet))
 		}
 
 		if sub.Gateway == "" {

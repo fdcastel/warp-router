@@ -130,18 +130,6 @@ func TestValidateInvalidVLAN(t *testing.T) {
 	assertContainsError(t, errs, "VLAN ID must be")
 }
 
-func TestValidateInvalidMTU(t *testing.T) {
-	cfg := &SiteConfig{
-		Hostname: "r1",
-		Interfaces: []Interface{
-			{Name: "wan1", Role: "wan", Device: "eth0", Address: "dhcp"},
-			{Name: "lan1", Role: "lan", Device: "eth1", Address: "10.0.0.1/24", MTU: 100},
-		},
-	}
-	errs := cfg.Validate()
-	assertContainsError(t, errs, "MTU must be")
-}
-
 func TestValidateOverlappingSubnets(t *testing.T) {
 	cfg := &SiteConfig{
 		Hostname: "r1",
@@ -204,6 +192,30 @@ func TestValidateDHCPMissingPoolStart(t *testing.T) {
 	}
 	errs := cfg.Validate()
 	assertContainsError(t, errs, "pool_start is required")
+}
+
+func TestValidateDHCPPoolOutsideSubnet(t *testing.T) {
+	cfg := validBase()
+	cfg.DHCP = &DHCPConfig{
+		Enabled: true,
+		Subnets: []DHCPSubnet{
+			{Subnet: "192.168.1.0/24", Interface: "lan1", PoolStart: "10.0.0.1", PoolEnd: "192.168.1.200", Gateway: "192.168.1.1"},
+		},
+	}
+	errs := cfg.Validate()
+	assertContainsError(t, errs, "pool_start 10.0.0.1 is outside subnet")
+}
+
+func TestValidateDHCPPoolEndOutsideSubnet(t *testing.T) {
+	cfg := validBase()
+	cfg.DHCP = &DHCPConfig{
+		Enabled: true,
+		Subnets: []DHCPSubnet{
+			{Subnet: "192.168.1.0/24", Interface: "lan1", PoolStart: "192.168.1.100", PoolEnd: "10.0.0.250", Gateway: "192.168.1.1"},
+		},
+	}
+	errs := cfg.Validate()
+	assertContainsError(t, errs, "pool_end 10.0.0.250 is outside subnet")
 }
 
 func TestValidateDNSInvalidForwarder(t *testing.T) {

@@ -77,6 +77,7 @@ type Result struct {
 }
 
 // Execute runs the full apply pipeline: render → write → reload for each step.
+// On failure, it attempts to restore previously backed-up config files.
 func (p *Pipeline) Execute(cfg *config.SiteConfig) Result {
 	var result Result
 
@@ -87,12 +88,22 @@ func (p *Pipeline) Execute(cfg *config.SiteConfig) Result {
 		return result
 	}
 
+	// Back up existing config files before overwriting
+	backups := make(map[string]string) // configPath → backupPath
+	for _, step := range p.Steps {
+		backupPath, err := backupFile(step.ConfigPath)
+		if err == nil && backupPath != "" {
+			backups[step.ConfigPath] = backupPath
+		}
+	}
+
 	for _, step := range p.Steps {
 		// Render config
 		content, err := step.Render(cfg)
 		if err != nil {
 			result.Failed = step.Name
 			result.Err = fmt.Errorf("render %s: %w", step.Name, err)
+			restoreBackups(backups)
 			return result
 		}
 
@@ -100,6 +111,7 @@ func (p *Pipeline) Execute(cfg *config.SiteConfig) Result {
 		if err := atomicWrite(step.ConfigPath, content); err != nil {
 			result.Failed = step.Name
 			result.Err = fmt.Errorf("write %s to %s: %w", step.Name, step.ConfigPath, err)
+			restoreBackups(backups)
 			return result
 		}
 
@@ -108,6 +120,7 @@ func (p *Pipeline) Execute(cfg *config.SiteConfig) Result {
 			if err := applySysctl(step.ConfigPath); err != nil {
 				result.Failed = step.Name
 				result.Err = fmt.Errorf("apply sysctl: %w", err)
+				restoreBackups(backups)
 				return result
 			}
 		}
@@ -117,6 +130,7 @@ func (p *Pipeline) Execute(cfg *config.SiteConfig) Result {
 			if err := p.Reloader.Reload(step.Service); err != nil {
 				result.Failed = step.Name
 				result.Err = fmt.Errorf("reload %s: %w", step.Service, err)
+				restoreBackups(backups)
 				return result
 			}
 		}
@@ -124,7 +138,40 @@ func (p *Pipeline) Execute(cfg *config.SiteConfig) Result {
 		result.Completed = append(result.Completed, step.Name)
 	}
 
+	// Clean up backups on success
+	for _, backupPath := range backups {
+		os.Remove(backupPath)
+	}
+
 	return result
+}
+
+// backupFile creates a backup copy of a config file. Returns "" if the source doesn't exist.
+func backupFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	backupPath := path + ".warp-backup"
+	if err := os.WriteFile(backupPath, data, 0644); err != nil {
+		return "", err
+	}
+	return backupPath, nil
+}
+
+// restoreBackups restores config files from backups (best-effort).
+func restoreBackups(backups map[string]string) {
+	for configPath, backupPath := range backups {
+		data, err := os.ReadFile(backupPath)
+		if err != nil {
+			continue
+		}
+		os.WriteFile(configPath, data, 0644)
+		os.Remove(backupPath)
+	}
 }
 
 // atomicWrite writes content to a file atomically via temp file + rename.
@@ -180,9 +227,41 @@ func applySysctl(path string) error {
 }
 
 // ProvisionVLANs creates VLAN subinterfaces for interfaces with VLAN > 0.
-// It derives the parent device from the dotted device name (e.g., eth0.100 → eth0).
-// Interfaces that already exist are skipped.
+// It reconciles IP addresses on existing interfaces, creates missing VLANs,
+// and removes stale VLAN interfaces not in the config.
 func ProvisionVLANs(cfg *config.SiteConfig) error {
+	// Build set of desired VLAN devices
+	desiredVLANs := make(map[string]config.Interface)
+	for _, iface := range cfg.Interfaces {
+		if iface.VLAN > 0 {
+			desiredVLANs[iface.Device] = iface
+		}
+	}
+
+	// Collect all parent devices referenced by config VLANs
+	parentDevices := make(map[string]bool)
+	for _, iface := range desiredVLANs {
+		parent := ParentDevice(iface.Device)
+		if parent != "" {
+			parentDevices[parent] = true
+		}
+	}
+
+	// Remove stale VLAN interfaces: any VLAN sub-interface on a known parent
+	// that is not in the desired set
+	for parent := range parentDevices {
+		existingVLANs, err := listVLANSubinterfaces(parent)
+		if err != nil {
+			continue // best effort
+		}
+		for _, existing := range existingVLANs {
+			if _, wanted := desiredVLANs[existing]; !wanted {
+				exec.Command("ip", "link", "delete", existing).Run()
+			}
+		}
+	}
+
+	// Create or reconcile desired VLANs
 	for _, iface := range cfg.Interfaces {
 		if iface.VLAN <= 0 {
 			continue
@@ -194,28 +273,29 @@ func ProvisionVLANs(cfg *config.SiteConfig) error {
 				iface.Name, iface.Device)
 		}
 
-		// Skip if already exists
-		if err := exec.Command("ip", "link", "show", iface.Device).Run(); err == nil {
-			continue
+		exists := exec.Command("ip", "link", "show", iface.Device).Run() == nil
+
+		if !exists {
+			// Create VLAN subinterface
+			cmd := exec.Command("ip", "link", "add", "link", parent,
+				"name", iface.Device, "type", "vlan", "id", fmt.Sprintf("%d", iface.VLAN))
+			if out, err := cmd.CombinedOutput(); err != nil {
+				return fmt.Errorf("creating VLAN %d on %s: %w\n%s", iface.VLAN, parent, err, out)
+			}
+
+			// Bring it up
+			if out, err := exec.Command("ip", "link", "set", iface.Device, "up").CombinedOutput(); err != nil {
+				return fmt.Errorf("bringing up %s: %w\n%s", iface.Device, err, out)
+			}
 		}
 
-		// Create VLAN subinterface
-		cmd := exec.Command("ip", "link", "add", "link", parent,
-			"name", iface.Device, "type", "vlan", "id", fmt.Sprintf("%d", iface.VLAN))
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("creating VLAN %d on %s: %w\n%s", iface.VLAN, parent, err, out)
-		}
-
-		// Bring it up
-		if out, err := exec.Command("ip", "link", "set", iface.Device, "up").CombinedOutput(); err != nil {
-			return fmt.Errorf("bringing up %s: %w\n%s", iface.Device, err, out)
-		}
-
-		// Assign IP address (if static)
+		// Reconcile IP address (flush existing, assign desired)
 		if iface.Address != "" && iface.Address != "dhcp" {
+			if exists {
+				exec.Command("ip", "addr", "flush", "dev", iface.Device).Run()
+			}
 			out, err := exec.Command("ip", "addr", "add", iface.Address, "dev", iface.Device).CombinedOutput()
 			if err != nil {
-				// Ignore "File exists" (address already assigned)
 				if !strings.Contains(string(out), "File exists") {
 					return fmt.Errorf("assigning %s to %s: %w\n%s", iface.Address, iface.Device, err, out)
 				}
@@ -223,6 +303,28 @@ func ProvisionVLANs(cfg *config.SiteConfig) error {
 		}
 	}
 	return nil
+}
+
+// listVLANSubinterfaces returns VLAN sub-interface names for a given parent device.
+func listVLANSubinterfaces(parent string) ([]string, error) {
+	out, err := exec.Command("ip", "-o", "link", "show", "type", "vlan").CombinedOutput()
+	if err != nil {
+		return nil, err
+	}
+	var result []string
+	for _, line := range strings.Split(string(out), "\n") {
+		// Format: "N: dev@parent: ..."
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		devPart := strings.TrimSuffix(fields[1], ":")
+		parts := strings.SplitN(devPart, "@", 2)
+		if len(parts) == 2 && parts[1] == parent {
+			result = append(result, parts[0])
+		}
+	}
+	return result, nil
 }
 
 // ParentDevice extracts the parent device name from a dotted VLAN device name.

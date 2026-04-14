@@ -17,7 +17,7 @@ import (
 // Maps to FR-007: Policy-based routing per source subnet.
 func TestPBRSteering(t *testing.T) {
 	topo := testenv.NewTopology(t, testenv.TopologySpec{
-		RouterTemplate: "local:vztmpl/warp-router-dev-lxc-amd64.tar.zst",
+		RouterTemplate: testenv.WarpRouterTemplate,
 	})
 	topo.Setup(t)
 
@@ -59,33 +59,10 @@ dns:
     - 1.1.1.1
 `
 
-	// Create dummy interfaces for the two WANs
-	cmds := []string{
-		"ip link add dummy1 type dummy && ip link set dummy1 up && ip addr add 198.51.100.1/24 dev dummy1",
-		"ip link add dummy2 type dummy && ip link set dummy2 up && ip addr add 203.0.113.1/24 dev dummy2",
-	}
-	for _, cmd := range cmds {
-		_, err := topo.PVE.ExecCT(routerVMID, cmd)
-		if err != nil {
-			t.Fatalf("setting up dummy interfaces: %v", err)
-		}
-	}
+	topo.CreateDummyWANPair(t, routerVMID)
 
-	// Apply config
-	err := topo.PVE.UploadFileToCT(routerVMID, "/etc/warp/site.yaml", siteConfig)
-	if err != nil {
-		t.Fatalf("uploading site config: %v", err)
-	}
-
-	out, err := topo.PVE.ExecCT(routerVMID, "/usr/local/bin/warp apply /etc/warp/site.yaml 2>&1")
-	if err != nil {
-		if !strings.Contains(out, "frr") || !strings.Contains(out, "nftables") {
-			t.Fatalf("warp apply failed critically: %v\noutput: %s", err, out)
-		}
-		t.Logf("warp apply partial: %s", out)
-	} else {
-		t.Logf("warp apply: %s", out)
-	}
+	out := topo.ApplyConfigAllowPartial(t, routerVMID, siteConfig, "frr", "nftables")
+	t.Logf("warp apply output: %s", out)
 
 	t.Run("FRRConfigHasPBRMap", func(t *testing.T) {
 		out, err := topo.PVE.ExecCT(routerVMID, "cat /etc/frr/frr.conf 2>&1")
@@ -94,8 +71,8 @@ dns:
 		}
 		t.Logf("FRR config:\n%s", out)
 
-		if !strings.Contains(out, "pbr-map lan-via-wan1") {
-			t.Error("FRR config missing PBR map 'lan-via-wan1'")
+		if !strings.Contains(out, "pbr-map warp-pbr") {
+			t.Error("FRR config missing merged PBR map 'warp-pbr'")
 		}
 		if !strings.Contains(out, "match src-ip 10.99.0.0/24") {
 			t.Error("FRR config missing PBR match for source 10.99.0.0/24")
@@ -115,7 +92,7 @@ dns:
 		if !strings.Contains(out, "interface eth0") {
 			t.Error("FRR config missing interface eth0 section for PBR policy")
 		}
-		if !strings.Contains(out, "pbr-policy lan-via-wan1") {
+		if !strings.Contains(out, "pbr-policy warp-pbr") {
 			t.Error("FRR config missing pbr-policy attachment to LAN interface")
 		}
 	})
@@ -129,8 +106,8 @@ dns:
 			// Fall through to check if at least the config was written
 		} else {
 			t.Logf("PBR map status:\n%s", out)
-			if !strings.Contains(out, "lan-via-wan1") {
-				t.Error("vtysh PBR map missing 'lan-via-wan1'")
+			if !strings.Contains(out, "warp-pbr") {
+				t.Error("vtysh PBR map missing 'warp-pbr'")
 			}
 			if !strings.Contains(out, "10.99.0.0/24") {
 				t.Error("vtysh PBR map missing source match '10.99.0.0/24'")

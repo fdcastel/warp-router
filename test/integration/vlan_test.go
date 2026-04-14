@@ -15,7 +15,7 @@ import (
 // nftables, FRR all see the VLAN interface).
 func TestVLANSubinterface(t *testing.T) {
 	topo := testenv.NewTopology(t, testenv.TopologySpec{
-		RouterTemplate: "local:vztmpl/warp-router-dev-lxc-amd64.tar.zst",
+		RouterTemplate: testenv.WarpRouterTemplate,
 	})
 	topo.Setup(t)
 
@@ -98,32 +98,15 @@ firewall:
 `
 
 	// Create parent dummy device (the trunk)
-	cmds := []string{
+	topo.RunCTCommands(
+		t,
+		routerVMID,
 		"ip link add dummy0 type dummy && ip link set dummy0 up",
 		"ip link add dummy1 type dummy && ip link set dummy1 up && ip addr add 198.51.100.1/24 dev dummy1",
-	}
-	for _, cmd := range cmds {
-		_, err := topo.PVE.ExecCT(routerVMID, cmd)
-		if err != nil {
-			t.Fatalf("setting up interfaces: %v", err)
-		}
-	}
+	)
 
-	// Apply config — this should create the VLAN subinterface
-	err := topo.PVE.UploadFileToCT(routerVMID, "/etc/warp/site.yaml", siteConfig)
-	if err != nil {
-		t.Fatalf("uploading site config: %v", err)
-	}
-
-	out, err := topo.PVE.ExecCT(routerVMID, "/usr/local/bin/warp apply /etc/warp/site.yaml 2>&1")
-	if err != nil {
-		if !strings.Contains(out, "nftables") {
-			t.Fatalf("warp apply failed: %v\noutput: %s", err, out)
-		}
-		t.Logf("warp apply partial: %s", out)
-	} else {
-		t.Logf("warp apply: %s", out)
-	}
+	out := topo.ApplyConfigAllowPartial(t, routerVMID, siteConfig, "nftables")
+	t.Logf("warp apply output: %s", out)
 
 	t.Run("VLANInterfaceCreated", func(t *testing.T) {
 		out, err := topo.PVE.ExecCT(routerVMID, "ip link show dummy0.100 2>&1")

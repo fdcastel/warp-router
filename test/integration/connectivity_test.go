@@ -16,7 +16,7 @@ import (
 // 3. warp validate/apply works with a basic config
 func TestBasicConnectivity(t *testing.T) {
 	topo := testenv.NewTopology(t, testenv.TopologySpec{
-		RouterTemplate: "local:vztmpl/warp-router-dev-lxc-amd64.tar.zst",
+		RouterTemplate: testenv.WarpRouterTemplate,
 	})
 	topo.Setup(t)
 
@@ -62,13 +62,7 @@ dns:
 	})
 
 	t.Run("WarpApply", func(t *testing.T) {
-		out, err := topo.PVE.ExecCT(routerVMID, "/usr/local/bin/warp apply /etc/warp/site.yaml 2>&1")
-		if err != nil {
-			t.Fatalf("warp apply failed: %v\noutput: %s", err, out)
-		}
-		if !strings.Contains(out, "Apply complete") {
-			t.Errorf("expected 'Apply complete' in output: %s", out)
-		}
+		out := topo.ApplyConfig(t, routerVMID, siteConfig)
 		t.Logf("warp apply output: %s", out)
 	})
 

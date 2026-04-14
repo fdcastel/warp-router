@@ -156,3 +156,29 @@ func TestRenderContainsSecuritySettings(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderDNSDisabled(t *testing.T) {
+	cfg := &config.SiteConfig{
+		Hostname: "r1",
+		Interfaces: []config.Interface{
+			{Name: "wan1", Role: "wan", Device: "eth0", Address: "dhcp"},
+			{Name: "lan1", Role: "lan", Device: "eth1", Address: "192.168.1.1/24"},
+		},
+		DNS: &config.DNSConfig{
+			Enabled:    false,
+			Forwarders: []string{"1.1.1.1"},
+		},
+	}
+
+	got, err := Render(cfg)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	if strings.Contains(got, "forward-zone") {
+		t.Error("disabled DNS should not produce forward-zone")
+	}
+	if strings.Contains(got, "interface:") {
+		t.Error("disabled DNS should not produce listen directives")
+	}
+}

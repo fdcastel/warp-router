@@ -72,7 +72,12 @@ type unboundData struct {
 }
 
 // Render generates unbound.conf from the site config.
+// Returns an empty config when DNS is explicitly disabled.
 func Render(cfg *config.SiteConfig) (string, error) {
+	if cfg.DNS != nil && !cfg.DNS.Enabled {
+		return "# Warp Router — DNS disabled by configuration.\n", nil
+	}
+
 	data := unboundData{
 		ListenAddresses: []string{"127.0.0.1", "::1"},
 	}
