@@ -117,3 +117,17 @@
 **Context**: Unbound reload failed intermittently during integration test suite.  
 **Problem**: The rootfs overlay installed unbound with `auto-trust-anchor-file` (DNSSEC validator mode). When `warp apply` wrote a forwarding-mode config with `module-config: "iterator"`, unbound couldn't live-reload across module changes. The reload-or-restart would fail in unprivileged LXC.  
 **Resolution**: Changed the overlay default to `module-config: "iterator"` (forwarding mode) since that's the expected default for router deployments. Full DNSSEC is still available when `warp apply` configures recursion mode.
+
+### AD-013: FRR NHT Handles Carrier-Loss Failover Natively (2026-04-14)
+**Decision**: Rely on FRR's Nexthop Tracking (NHT) for carrier-loss WAN failover, not the warp failover controller.  
+**Rationale**: When a link goes down (`ip link set dev down`), FRR's zebra detects the nexthop is unreachable via NHT and marks it "inactive" in the RIB — removing it from the kernel FIB within ~800ms. When the link is restored, FRR re-adds the nexthop automatically. This is faster and more reliable than polling health probes. The warp failover controller (netlink-based) would conflict with FRR's route management since both try to write the same default route. For probe-based failover (gateway unreachable but link up), a separate mechanism is needed — either BFD (if the gateway supports it) or a `warp monitor` daemon that manipulates FRR via vtysh rather than netlink.
+
+### LL-011: FRR Marks Nexthops Inactive, Doesn't Remove Them (2026-04-14)
+**Context**: WAN failover integration test initially checked for nexthop IP absence in `show ip route`.  
+**Problem**: When a link goes down, FRR doesn't remove the nexthop from the RIB — it marks it as "inactive" (e.g., `via 198.51.100.254, dummy1 inactive`). The route stays in the RIB but the `*` (FIB) marker is removed, meaning the kernel no longer uses it. Tests must check for the "inactive" keyword, not for IP absence.  
+**Resolution**: Changed test assertions to check for `"dummy1 inactive"` and absence of `"dummy2 inactive"` rather than presence/absence of gateway IPs.
+
+### LL-012: ZFS Datasets Block Container Destruction (2026-04-14)
+**Context**: Integration tests on Proxmox with ZFS storage sometimes left stale containers that couldn't be destroyed.  
+**Problem**: `pct destroy --force --purge` fails with "dataset is busy" when the ZFS subvolume is still mounted or has open file handles. This happens when a prior test run crashes mid-execution.  
+**Resolution**: Force cleanup by unmounting the ZFS dataset first (`zfs set mountpoint=none`), then `zfs destroy -f`, then `rm /etc/pve/lxc/<vmid>.conf`. The topology-based tests (using t.Cleanup) handle this automatically; the standalone tests (services_test.go) that use fixed VMIDs are more vulnerable.

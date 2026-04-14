@@ -228,14 +228,14 @@ specs/                         # Existing spec documents (unchanged)
 | 6.2 | ❌ | QCOW2 image lifecycle test | Boot QCOW2 with cloud-init, verify: cloud-init completes, hostname set, SSH key injected, all services start, `warp` binary present. |
 | 6.3 | ✅ | Basic connectivity test (US1) | `connectivity_test.go`: provisions router+client on internal bridge, applies warp config (validate+apply), verifies IP forwarding, bidirectional ping, warp status. 5 subtests. |
 | 6.4 | ✅ | ECMP distribution test (US2) | `ecmp_test.go`: dual-WAN with dummy interfaces, FRR ECMP routes in RIB, dual masquerade, warp status. Also fixed FRR ECMP syntax bug (separate `ip route` commands). 5 subtests. |
-| 6.5 | ❌ | WAN failover test (US2) | With dual-WAN ECMP active: `ip link set wan1 down` on router (carrier loss). Verify new flows shift to WAN2 within 3 seconds. Restore WAN1, verify recovery. Maps to SC-003. |
-| 6.6 | ❌ | WAN probe failover test (US2) | With dual-WAN ECMP: block ICMP on WAN gateway 1 (firewall). Verify router detects failure via probe timeout (~3s), shifts traffic. Maps to SC-003 (probe path). |
-| 6.7 | ❌ | PBR steering test (US2) | Apply config with PBR rule steering specific source subnet to WAN1. Verify matching traffic uses WAN1. Fail WAN1, verify fallback to ECMP on WAN2. Maps to FR-007. |
+| 6.5 | ✅ | WAN failover test (US2) | `failover_test.go`: dual-WAN ECMP with dummy interfaces. Link down → FRR marks nexthop inactive (~1s), only WAN2 in FIB. Link restore → both nexthops recover. Timing subtest: failover in ~800ms (req: ≤3s). 5 subtests. |
+| 6.6 | ⏯️ | WAN probe failover test (US2) | Deferred: requires `warp monitor` daemon command (health prober + failover controller). Also needs resolution of FRR/netlink route management conflict — failover controller uses netlink RouteReplace which conflicts with FRR's zebra route management. See AD-013. |
+| 6.7 | ✅ | PBR steering test (US2) | `pbr_test.go`: dual-WAN ECMP + PBR rule (10.99.0.0/24 → wan1). FRR config has pbr-map, policy attached to LAN. vtysh confirms PBR map installed (tableid 10000). WAN1 failure → fallback to WAN2 ECMP. 6 subtests. |
 | 6.8 | ✅ | Service health test | `services_test.go/TestServiceHealth`: verifies warp status, all 5 services active after apply, FRR/nftables configs rendered, IP forwarding enabled. 5 subtests. |
 | 6.9 | ✅ | Config rollback test | `services_test.go/TestConfigRollback`: apply v1 → apply v2 → rollback → verify v1 restored. Checks FRR hostname, revisions list (3 entries). 4 subtests. |
 | 6.10 | ✅ | nftables firewall test | `firewall_test.go`: ruleset loaded, input/forward default drop, LAN→WAN forward allowed, SSH allow, masquerade on WAN, established/related, drop counters, client ping. 9 subtests. |
 | 6.11 | ✅ | DHCP service test | `dhcp_test.go`: Kea active, pool config rendered, client DHCP lease acquisition via dhclient, lease file verification. 4 subtests. |
-| 6.12 | ❌ | VLAN subinterface test | Apply config with 802.1Q VLAN LAN segments on a tagged trunk. Verify DHCP/DNS/NAT work per VLAN segment. |
+| 6.12 | ⏯️ | VLAN subinterface test | Deferred: config model has Interface.VLAN field but no renderer creates VLAN subinterfaces. Needs new apply pipeline step to create `ip link add ... type vlan id ...` before service config. |
 
 ---
 
