@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/fdcastel/warp-router/internal/config"
@@ -78,6 +79,13 @@ type Result struct {
 // Execute runs the full apply pipeline: render → write → reload for each step.
 func (p *Pipeline) Execute(cfg *config.SiteConfig) Result {
 	var result Result
+
+	// Provision VLAN subinterfaces before config rendering
+	if err := ProvisionVLANs(cfg); err != nil {
+		result.Failed = "vlan"
+		result.Err = err
+		return result
+	}
 
 	for _, step := range p.Steps {
 		// Render config
@@ -169,6 +177,61 @@ func applySysctl(path string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// ProvisionVLANs creates VLAN subinterfaces for interfaces with VLAN > 0.
+// It derives the parent device from the dotted device name (e.g., eth0.100 → eth0).
+// Interfaces that already exist are skipped.
+func ProvisionVLANs(cfg *config.SiteConfig) error {
+	for _, iface := range cfg.Interfaces {
+		if iface.VLAN <= 0 {
+			continue
+		}
+
+		parent := ParentDevice(iface.Device)
+		if parent == "" {
+			return fmt.Errorf("VLAN interface %s: cannot derive parent from device %q (expected format: parent.vid)",
+				iface.Name, iface.Device)
+		}
+
+		// Skip if already exists
+		if err := exec.Command("ip", "link", "show", iface.Device).Run(); err == nil {
+			continue
+		}
+
+		// Create VLAN subinterface
+		cmd := exec.Command("ip", "link", "add", "link", parent,
+			"name", iface.Device, "type", "vlan", "id", fmt.Sprintf("%d", iface.VLAN))
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("creating VLAN %d on %s: %w\n%s", iface.VLAN, parent, err, out)
+		}
+
+		// Bring it up
+		if out, err := exec.Command("ip", "link", "set", iface.Device, "up").CombinedOutput(); err != nil {
+			return fmt.Errorf("bringing up %s: %w\n%s", iface.Device, err, out)
+		}
+
+		// Assign IP address (if static)
+		if iface.Address != "" && iface.Address != "dhcp" {
+			out, err := exec.Command("ip", "addr", "add", iface.Address, "dev", iface.Device).CombinedOutput()
+			if err != nil {
+				// Ignore "File exists" (address already assigned)
+				if !strings.Contains(string(out), "File exists") {
+					return fmt.Errorf("assigning %s to %s: %w\n%s", iface.Address, iface.Device, err, out)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// ParentDevice extracts the parent device name from a dotted VLAN device name.
+// For example, "eth0.100" returns "eth0". Returns "" if no dot is found.
+func ParentDevice(device string) string {
+	if idx := strings.LastIndex(device, "."); idx > 0 {
+		return device[:idx]
+	}
+	return ""
 }
 
 // AcquireLock acquires an exclusive file lock for the apply pipeline.

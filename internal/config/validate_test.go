@@ -294,6 +294,28 @@ func TestValidatePBRDuplicatePriority(t *testing.T) {
 	assertContainsError(t, errs, "duplicate priority")
 }
 
+func TestValidateVLANRequiresDottedDeviceName(t *testing.T) {
+	cfg := validBase()
+	cfg.Interfaces = append(cfg.Interfaces, Interface{
+		Name: "vlan100", Role: "lan", Device: "eth2", Address: "192.168.100.1/24", VLAN: 100,
+	})
+	errs := cfg.Validate()
+	assertContainsError(t, errs, "dotted device name")
+}
+
+func TestValidateVLANDottedDeviceNameValid(t *testing.T) {
+	cfg := validBase()
+	cfg.Interfaces = append(cfg.Interfaces, Interface{
+		Name: "vlan100", Role: "lan", Device: "eth0.100", Address: "192.168.100.1/24", VLAN: 100,
+	})
+	errs := cfg.Validate()
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "vlan100") && strings.Contains(err.Error(), "dotted") {
+			t.Errorf("unexpected VLAN error: %v", err)
+		}
+	}
+}
+
 // --- Helpers ---
 
 func validBase() *SiteConfig {

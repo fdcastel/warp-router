@@ -1,12 +1,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
 	"text/tabwriter"
+	"time"
 
 	"github.com/fdcastel/warp-router/internal/apply"
 	"github.com/fdcastel/warp-router/internal/config"
+	"github.com/fdcastel/warp-router/internal/failover"
 	"github.com/fdcastel/warp-router/internal/health"
 	"github.com/fdcastel/warp-router/internal/revision"
 )
@@ -30,6 +37,8 @@ func main() {
 		cmdRevisions()
 	case "status":
 		cmdStatus()
+	case "monitor":
+		cmdMonitor()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", os.Args[1])
 		printUsage()
@@ -46,6 +55,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  rollback                 Rollback to the previous config revision")
 	fmt.Fprintln(os.Stderr, "  revisions                List stored config revisions")
 	fmt.Fprintln(os.Stderr, "  status                   Show current applied revision")
+	fmt.Fprintln(os.Stderr, "  monitor [config.yaml]    Monitor WAN health and manage failover")
 }
 
 func configPath() string {
@@ -260,4 +270,120 @@ func cmdStatus() {
 		}
 		w.Flush()
 	}
+}
+
+func cmdMonitor() {
+	path := configPath()
+
+	cfg, err := config.LoadFile(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
+	errs := cfg.Validate()
+	if len(errs) > 0 {
+		fmt.Fprintf(os.Stderr, "Validation failed with %d error(s):\n", len(errs))
+		for _, e := range errs {
+			fmt.Fprintf(os.Stderr, "  - %v\n", e)
+		}
+		os.Exit(1)
+	}
+
+	// Build probe configs from WAN interfaces
+	var probeConfigs []health.ProbeConfig
+	var initialRoutes []failover.Nexthop
+
+	for _, iface := range cfg.Interfaces {
+		if iface.Role != "wan" || iface.Gateway == "" {
+			continue
+		}
+
+		// Health probe config
+		pc := health.ProbeConfig{
+			Name:   iface.Name,
+			Target: iface.Gateway,
+		}
+		if iface.HealthCheck != nil {
+			if iface.HealthCheck.Target != "" {
+				pc.Target = iface.HealthCheck.Target
+			}
+			if iface.HealthCheck.Interval > 0 {
+				pc.Interval = time.Duration(iface.HealthCheck.Interval) * time.Second
+			}
+			if iface.HealthCheck.Timeout > 0 {
+				pc.Timeout = time.Duration(iface.HealthCheck.Timeout) * time.Second
+			}
+			if iface.HealthCheck.Failures > 0 {
+				pc.Failures = iface.HealthCheck.Failures
+			}
+		}
+		probeConfigs = append(probeConfigs, pc)
+
+		// Track initial route (already installed by warp apply + FRR)
+		weight := iface.Weight
+		if weight <= 0 {
+			weight = 1
+		}
+		initialRoutes = append(initialRoutes, failover.Nexthop{
+			Gateway: net.ParseIP(iface.Gateway),
+			Device:  iface.Device,
+			Weight:  weight,
+		})
+	}
+
+	if len(probeConfigs) == 0 {
+		fmt.Fprintln(os.Stderr, "No WAN interfaces with gateways to monitor.")
+		os.Exit(1)
+	}
+
+	// Create components
+	routes := failover.NewVtyshRouteManager(initialRoutes)
+	prober := health.NewProber()
+	ctrl := failover.NewController(cfg, routes, prober)
+
+	// Wire up state change callback
+	prober.OnStateChange = func(name string, oldStatus, newStatus health.Status) {
+		fmt.Printf("[%s] %s: %s → %s\n",
+			time.Now().Format("15:04:05"), name, oldStatus, newStatus)
+		ctrl.HandleStateChange(name, oldStatus, newStatus)
+	}
+
+	// Install initial routes (no-op for vtysh since routes are already in FRR)
+	if err := ctrl.InstallInitialRoutes(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error installing initial routes: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Start probing
+	ctx, cancel := context.WithCancel(context.Background())
+	prober.Start(ctx, probeConfigs)
+
+	// Periodic health status file writes
+	go func() {
+		statusDir := filepath.Dir(health.StatusFilePath)
+		os.MkdirAll(statusDir, 0755)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Second):
+				prober.WriteStatusFile(health.StatusFilePath)
+			}
+		}
+	}()
+
+	fmt.Printf("Monitoring %d WAN uplink(s). Press Ctrl+C to stop.\n", len(probeConfigs))
+	for _, pc := range probeConfigs {
+		fmt.Printf("  %s → %s\n", pc.Name, pc.Target)
+	}
+
+	// Wait for signal
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+
+	fmt.Println("\nShutting down monitor...")
+	cancel()
+	prober.Stop()
 }

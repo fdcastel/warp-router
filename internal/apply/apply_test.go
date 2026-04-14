@@ -250,3 +250,25 @@ func TestNewPipelineHasAllSteps(t *testing.T) {
 		}
 	}
 }
+
+func TestParentDevice(t *testing.T) {
+	tests := []struct {
+		device string
+		want   string
+	}{
+		{"eth0.100", "eth0"},
+		{"bond0.200", "bond0"},
+		{"ens3.50", "ens3"},
+		{"dummy0.10", "dummy0"},
+		{"eth0", ""},
+		{"", ""},
+		{".100", ""},
+	}
+
+	for _, tt := range tests {
+		got := ParentDevice(tt.device)
+		if got != tt.want {
+			t.Errorf("ParentDevice(%q) = %q, want %q", tt.device, got, tt.want)
+		}
+	}
+}

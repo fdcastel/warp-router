@@ -85,6 +85,10 @@ func (c *SiteConfig) validateInterfaces() []error {
 			errs = append(errs, fmt.Errorf("%s (%s): VLAN ID must be 0-4094, got %d", prefix, iface.Name, iface.VLAN))
 		}
 
+		if iface.VLAN > 0 && !strings.Contains(iface.Device, ".") {
+			errs = append(errs, fmt.Errorf("%s (%s): VLAN interfaces must use dotted device name (e.g., eth0.%d)", prefix, iface.Name, iface.VLAN))
+		}
+
 		if iface.MTU != 0 && (iface.MTU < 576 || iface.MTU > 9000) {
 			errs = append(errs, fmt.Errorf("%s (%s): MTU must be 576-9000, got %d", prefix, iface.Name, iface.MTU))
 		}
