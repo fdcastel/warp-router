@@ -264,12 +264,12 @@ specs/                         # Existing spec documents (unchanged)
 
 | # | Status | Task | Details |
 |---|--------|------|---------|
-| 8.1 | ❌ | Create `build.yml` workflow | Trigger: push to main, pull request, tag. Steps: checkout, install build deps (mmdebstrap, libguestfs-tools, qemu-utils), build rootfs, build LXC, build QCOW2. Upload artifacts. Run `go test ./...` (unit tests). |
+| 8.1 | ✅ | Create `build.yml` workflow | Added `.github/workflows/build.yml` with push/PR/tag triggers, unit tests, image builds, artifact upload, and rootfs + Go cache usage. |
 | 8.2 | ❌ | Create `test-integration.yml` workflow | Trigger: `workflow_dispatch` with inputs for image artifact URL and Proxmox target. Steps: download image artifacts, run `go test ./test/integration/...` with Proxmox env vars from GitHub secrets. Produce JUnit XML report. |
-| 8.3 | ❌ | Create `release.yml` workflow | Trigger: tag push (`v*`). Steps: build LXC and QCOW2 images, compute SHA256 checksums, create GitHub Release, upload `.tar.zst`, `.qcow2`, and `checksums.txt` as release assets. |
+| 8.3 | ✅ | Create `release.yml` workflow | Added `.github/workflows/release.yml` on tag push (`v*`) to build artifacts, generate checksums, and publish GitHub Release assets. |
 | 8.4 | ❌ | Configure GitHub secrets | Document required secrets: `PROXMOX_API_URL`, `PROXMOX_API_TOKEN_ID`, `PROXMOX_API_TOKEN_SECRET`, `PROXMOX_NODE`, `PROXMOX_SSH_KEY`. Add to repo settings. |
-| 8.5 | ❌ | Add artifact naming and versioning | All artifacts include version derived from git tag (release) or `dev-<short-sha>` (CI). Example: `warp-router-v0.1.0-lxc-amd64.tar.zst`, `warp-router-v0.1.0-amd64.qcow2`. |
-| 8.6 | ❌ | Add build caching | Cache mmdebstrap rootfs (keyed on packages.list hash), Go module cache, and Go build cache in CI to speed up builds. |
+| 8.5 | ✅ | Add artifact naming and versioning | Makefile `VERSION` now resolves to exact tag on releases or `dev-<short-sha>` on non-tag builds; artifact names include this version. |
+| 8.6 | ✅ | Add build caching | Added `actions/cache` for rootfs keyed by rootfs inputs and enabled Go module/build cache via `actions/setup-go`. |
 
 ---
 

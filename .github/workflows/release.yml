@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Cache rootfs build directory
+        id: cache-rootfs
+        uses: actions/cache@v4
+        with:
+          path: build/rootfs
+          key: rootfs-${{ runner.os }}-${{ hashFiles('packaging/rootfs/packages.list', 'packaging/rootfs/hooks/**', 'packaging/rootfs/overlay/**') }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            mmdebstrap \
+            zstd \
+            qemu-utils \
+            libguestfs-tools \
+            gdisk \
+            dosfstools \
+            grub-efi-amd64-bin \
+            grub-pc-bin
+
+      - name: Build artifacts
+        run: |
+          make build
+          if [ "${{ steps.cache-rootfs.outputs.cache-hit }}" != "true" ]; then
+            make rootfs
+            sudo chown -R "$USER":"$USER" build/rootfs
+          fi
+          make lxc
+          make qcow2
+
+      - name: Generate checksums
+        run: |
+          sha256sum build/warp-router-*-lxc-amd64.tar.zst > build/checksums.txt
+          sha256sum build/warp-router-*-amd64.qcow2 >> build/checksums.txt
+
+      - name: Create GitHub release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/warp-router-*-lxc-amd64.tar.zst
+            build/warp-router-*-amd64.qcow2
+            build/checksums.txt
+          generate_release_notes: true

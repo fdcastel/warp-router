@@ -1,6 +1,6 @@
 .PHONY: build rootfs lxc qcow2 test test-integration clean
 
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev-$(shell git rev-parse --short HEAD)")
+VERSION ?= $(shell if git describe --exact-match --tags >/dev/null 2>&1; then git describe --exact-match --tags; else echo "dev-$(shell git rev-parse --short HEAD)"; fi)
 BINARY  := warp
 BUILDDIR := build
 ROOTFSDIR := $(BUILDDIR)/rootfs

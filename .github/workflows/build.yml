@@ -1,0 +1,80 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - "v*"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Cache rootfs build directory
+        id: cache-rootfs
+        uses: actions/cache@v4
+        with:
+          path: build/rootfs
+          key: rootfs-${{ runner.os }}-${{ hashFiles('packaging/rootfs/packages.list', 'packaging/rootfs/hooks/**', 'packaging/rootfs/overlay/**') }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            mmdebstrap \
+            zstd \
+            qemu-utils \
+            libguestfs-tools \
+            gdisk \
+            dosfstools \
+            grub-efi-amd64-bin \
+            grub-pc-bin
+
+      - name: Run unit tests
+        run: go test ./...
+
+      - name: Build warp binary
+        run: make build
+
+      - name: Build rootfs
+        if: steps.cache-rootfs.outputs.cache-hit != 'true'
+        run: |
+          make rootfs
+          sudo chown -R "$USER":"$USER" build/rootfs
+
+      - name: Build LXC artifact
+        run: make lxc
+
+      - name: Build QCOW2 artifact
+        run: make qcow2
+
+      - name: Compute checksums
+        run: |
+          sha256sum build/warp-router-*-lxc-amd64.tar.zst > build/checksums.txt
+          sha256sum build/warp-router-*-amd64.qcow2 >> build/checksums.txt
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: warp-router-build-artifacts
+          path: |
+            build/warp-router-*-lxc-amd64.tar.zst
+            build/warp-router-*-amd64.qcow2
+            build/checksums.txt
+          if-no-files-found: error
