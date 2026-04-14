@@ -15,6 +15,7 @@ type Topology struct {
 	Config *Config
 	PVE    *PVE
 	RunID  string
+	Spec   TopologySpec
 
 	// Bridges created for this test run
 	LANBridge string // Internal bridge for LAN segment
@@ -61,6 +62,7 @@ func NewTopology(t *testing.T, spec TopologySpec) *Topology {
 		Config:    cfg,
 		PVE:       pve,
 		RunID:     runID,
+		Spec:      spec,
 		LANBridge: fmt.Sprintf("wt%s", runID), // e.g., wt1a2b3c
 	}
 
@@ -103,11 +105,15 @@ func (topo *Topology) Setup(t *testing.T) {
 	// 2. Create router CT
 	routerVMID := topo.AllocVMID()
 	topo.RouterLANIP = "10.99.0.1/24"
+	routerTemplate := topo.Config.Template
+	if topo.Spec.RouterTemplate != "" {
+		routerTemplate = topo.Spec.RouterTemplate
+	}
 	t.Logf("Creating router CT %d", routerVMID)
 	err = topo.PVE.CreateCT(CTSpec{
 		VMID:     routerVMID,
 		Hostname: fmt.Sprintf("wt-router-%s", topo.RunID),
-		Template: topo.Config.Template,
+		Template: routerTemplate,
 		Storage:  topo.Config.StoragePool,
 		Cores:    1,
 		MemoryMB: 512,

@@ -209,8 +209,25 @@ func (p *PVE) DestroyBridge(name string) error {
 
 // UploadFile writes content to a file on the PVE host.
 func (p *PVE) UploadFile(path, content string) error {
+	// Ensure parent directory exists
+	dir := path[:strings.LastIndex(path, "/")]
+	p.Run(fmt.Sprintf("mkdir -p %s", dir))
 	_, err := p.Run(fmt.Sprintf("cat > %s << 'WARP_EOF'\n%s\nWARP_EOF", path, content))
 	return err
+}
+
+// UploadFileToCT writes content to a file inside a container.
+// It writes to a temp file on the PVE host first, then pushes to the container.
+func (p *PVE) UploadFileToCT(vmid int, path, content string) error {
+	tmpPath := fmt.Sprintf("/tmp/warp-test/ct-%d-upload", vmid)
+	if err := p.UploadFile(tmpPath, content); err != nil {
+		return fmt.Errorf("writing temp file: %w", err)
+	}
+	_, err := p.Run(fmt.Sprintf("pct push %d %s %s", vmid, tmpPath, path))
+	if err != nil {
+		return fmt.Errorf("pushing file to CT: %w", err)
+	}
+	return nil
 }
 
 // CTSpec defines the configuration for a test LXC container.
