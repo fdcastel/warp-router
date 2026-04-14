@@ -183,6 +183,8 @@ specs/                         # Existing spec documents (unchanged)
 | 3.10 | ✅ | Implement rollback logic | Previous() + rollback command in CLI. Rollback creates new revision. Commit: e55b80a |
 | 3.11 | ✅ | Build `warp` CLI commands | `cmd/warp/`: validate, apply, rollback, revisions, status. Plain subcommands (no cobra). 7 CLI integration tests. Commit: dbe7a03 |
 | 3.12 | ✅ | Install `warp` binary into rootfs | build-rootfs.sh installs build/warp to /usr/local/bin/warp. Also added ifupdown + dns-root-data packages, fixed cloud-init service enablement. |
+| 3.13 | ✅ | Add VLAN subinterface provisioning in apply pipeline | `internal/apply/`: `ProvisionVLANs()` creates VLAN devices (`ip link add ... type vlan`), sets interface UP, assigns static IPs, idempotent on repeated apply. Enables Phase 6.12. |
+| 3.14 | ✅ | Make revision IDs collision-safe | `internal/revision/store.go`: when multiple `Save()` calls happen within one second, append numeric suffix (`-01`, `-02`, ...). Fixes flaky rollback history tests under fast apply/rollback cycles. |
 
 ---
 
@@ -197,6 +199,8 @@ specs/                         # Existing spec documents (unchanged)
 | 4.3 | ✅ | Implement PBR rule management | PBR rules in failover controller: removed on uplink down, restored on recovery. Tested in controller tests. |
 | 4.4 | ✅ | Implement health status CLI | JSON status file at /run/warp/health.json. `warp status` reads and displays WAN health table. |
 | 4.5 | ✅ | Unit tests for health + failover | 8 probe tests + 8 failover tests covering all state transitions. |
+| 4.6 | ✅ | Implement monitor daemon command | `cmd/warp/main.go`: added `warp monitor [config]` command. Starts WAN probes, writes `/run/warp/health.json`, handles SIGINT/SIGTERM lifecycle. |
+| 4.7 | ✅ | Implement FRR vtysh route manager | `internal/failover/vtysh.go`: route updates through FRR (`vtysh`) instead of netlink to avoid zebra route ownership conflicts. Used by monitor for probe-based failover (Phase 6.6). |
 
 ---
 
@@ -215,6 +219,7 @@ specs/                         # Existing spec documents (unchanged)
 | 5.7 | ✅ | Implement topology builder | `testenv/topology.go`: NewTopology creates bridge + router/client CTs, t.Cleanup teardown. |
 | 5.8 | ✅ | Implement teardown/cleanup | Topology.Teardown destroys CTs (reverse order) + bridge + temp files. |
 | 5.9 | ✅ | Write topology smoke test | `integration/smoke_test.go`: 4 subtests (router running, client running, bidirectional ping). Tested on PVE 9.1.4. |
+| 5.10 | ✅ | Harden CT teardown for busy ZFS datasets | `testenv/pve.go`: `DestroyCT()` now handles `dataset is busy` by forced ZFS cleanup and verifies CT removal before returning. Stabilizes fixed-VMID integration tests. |
 
 ---
 
@@ -225,17 +230,17 @@ specs/                         # Existing spec documents (unchanged)
 | # | Status | Task | Details |
 |---|--------|------|---------|
 | 6.1 | ✅ | LXC image lifecycle test | `lifecycle_test.go`: boots warp-router LXC with public IP. Verifies: 6 services active, warp binary present, /etc/warp exists, internet connectivity. 7 subtests. |
-| 6.2 | ❌ | QCOW2 image lifecycle test | Boot QCOW2 with cloud-init, verify: cloud-init completes, hostname set, SSH key injected, all services start, `warp` binary present. |
+| 6.2 | ⏯️ | QCOW2 image lifecycle test | Deferred — requires QCOW2 image build/runtime environment (Phase 2.5 blocker). |
 | 6.3 | ✅ | Basic connectivity test (US1) | `connectivity_test.go`: provisions router+client on internal bridge, applies warp config (validate+apply), verifies IP forwarding, bidirectional ping, warp status. 5 subtests. |
 | 6.4 | ✅ | ECMP distribution test (US2) | `ecmp_test.go`: dual-WAN with dummy interfaces, FRR ECMP routes in RIB, dual masquerade, warp status. Also fixed FRR ECMP syntax bug (separate `ip route` commands). 5 subtests. |
 | 6.5 | ✅ | WAN failover test (US2) | `failover_test.go`: dual-WAN ECMP with dummy interfaces. Link down → FRR marks nexthop inactive (~1s), only WAN2 in FIB. Link restore → both nexthops recover. Timing subtest: failover in ~800ms (req: ≤3s). 5 subtests. |
-| 6.6 | ⏯️ | WAN probe failover test (US2) | Deferred: requires `warp monitor` daemon command (health prober + failover controller). Also needs resolution of FRR/netlink route management conflict — failover controller uses netlink RouteReplace which conflicts with FRR's zebra route management. See AD-013. |
+| 6.6 | ✅ | WAN probe failover test (US2) | `probe_failover_test.go`: starts `warp monitor`, simulates gateway probe failure with link still UP, verifies monitor removes failed WAN route from FRR via vtysh and restores it on recovery. 6 subtests. |
 | 6.7 | ✅ | PBR steering test (US2) | `pbr_test.go`: dual-WAN ECMP + PBR rule (10.99.0.0/24 → wan1). FRR config has pbr-map, policy attached to LAN. vtysh confirms PBR map installed (tableid 10000). WAN1 failure → fallback to WAN2 ECMP. 6 subtests. |
 | 6.8 | ✅ | Service health test | `services_test.go/TestServiceHealth`: verifies warp status, all 5 services active after apply, FRR/nftables configs rendered, IP forwarding enabled. 5 subtests. |
 | 6.9 | ✅ | Config rollback test | `services_test.go/TestConfigRollback`: apply v1 → apply v2 → rollback → verify v1 restored. Checks FRR hostname, revisions list (3 entries). 4 subtests. |
 | 6.10 | ✅ | nftables firewall test | `firewall_test.go`: ruleset loaded, input/forward default drop, LAN→WAN forward allowed, SSH allow, masquerade on WAN, established/related, drop counters, client ping. 9 subtests. |
 | 6.11 | ✅ | DHCP service test | `dhcp_test.go`: Kea active, pool config rendered, client DHCP lease acquisition via dhclient, lease file verification. 4 subtests. |
-| 6.12 | ⏯️ | VLAN subinterface test | Deferred: config model has Interface.VLAN field but no renderer creates VLAN subinterfaces. Needs new apply pipeline step to create `ip link add ... type vlan id ...` before service config. |
+| 6.12 | ✅ | VLAN subinterface test | `vlan_test.go`: verifies VLAN subinterface creation (`dummy0.100`, VID 100), interface up state, IP assignment, DHCP/nftables integration, and apply idempotency. 7 subtests. |
 
 ---
 

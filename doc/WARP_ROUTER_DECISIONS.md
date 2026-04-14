@@ -131,3 +131,21 @@
 **Context**: Integration tests on Proxmox with ZFS storage sometimes left stale containers that couldn't be destroyed.  
 **Problem**: `pct destroy --force --purge` fails with "dataset is busy" when the ZFS subvolume is still mounted or has open file handles. This happens when a prior test run crashes mid-execution.  
 **Resolution**: Force cleanup by unmounting the ZFS dataset first (`zfs set mountpoint=none`), then `zfs destroy -f`, then `rm /etc/pve/lxc/<vmid>.conf`. The topology-based tests (using t.Cleanup) handle this automatically; the standalone tests (services_test.go) that use fixed VMIDs are more vulnerable.
+
+### AD-014: Probe Failover Uses `ping` Binary via PingFunc (2026-04-14)
+**Decision**: In `warp monitor`, use `health.Prober.PingFunc` with `/bin/ping` instead of raw ICMP sockets from `x/net/icmp`.  
+**Rationale**: Raw ICMP socket probing in unprivileged LXC is unreliable due to kernel capability and sysctl constraints (`ping_group_range` may be unavailable/immutable). The `ping` binary ships with appropriate capabilities and works consistently in the target environment while preserving existing health probe semantics.
+
+### AD-015: Probe Failover Route Changes Go Through FRR vtysh (2026-04-14)
+**Decision**: Implement probe-driven route changes using `VtyshRouteManager` and FRR `ip route` add/remove commands, not direct netlink route replacement.  
+**Rationale**: FRR zebra owns the routing table in this architecture. Netlink route replacement from an external controller causes ownership races/conflicts. Driving route mutations through FRR keeps control-plane consistency and avoids route churn.
+
+### LL-013: Revision IDs Collide Under Fast Apply/Rollback (2026-04-14)
+**Context**: Full integration suite intermittently failed `TestConfigRollback` expecting 3 revisions but finding 2.  
+**Problem**: Revision IDs were second-granularity timestamps (`YYYYMMDDTHHMMSSZ`). Multiple saves in the same second overwrote the same revision directory.  
+**Resolution**: Keep timestamp base ID for readability, but append collision suffixes (`-01`, `-02`, ...) when the target revision directory already exists.
+
+### LL-014: Test Teardown Must Verify CT Removal (2026-04-14)
+**Context**: Fixed-VMID integration tests (`9060+`) were flaky in full-suite runs.  
+**Problem**: Destroy helper returned success even when container metadata/disk still existed after retries. Subsequent create failed with "CT already exists."  
+**Resolution**: Hardened `DestroyCT` to verify absence of `pct config`, and if needed perform forced ZFS subvolume + CT config cleanup before returning.
