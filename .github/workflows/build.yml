@@ -59,11 +59,26 @@ jobs:
           make rootfs
           sudo chown -R "$USER":"$USER" build/rootfs
 
+      - name: Compute artifact version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build LXC artifact
-        run: make lxc
+        run: |
+          packaging/lxc/build-lxc.sh \
+            build/rootfs \
+            build/warp-router-${{ steps.version.outputs.value }}-lxc-amd64.tar.zst
 
       - name: Build QCOW2 artifact
-        run: make qcow2
+        run: |
+          sudo packaging/qcow2/build-qcow2.sh \
+            build/rootfs \
+            build/warp-router-${{ steps.version.outputs.value }}-amd64.qcow2
 
       - name: Compute checksums
         run: |

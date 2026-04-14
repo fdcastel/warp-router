@@ -50,8 +50,14 @@ jobs:
             make rootfs
             sudo chown -R "$USER":"$USER" build/rootfs
           fi
-          make lxc
-          make qcow2
+
+          VERSION="${GITHUB_REF_NAME}"
+          packaging/lxc/build-lxc.sh \
+            build/rootfs \
+            build/warp-router-${VERSION}-lxc-amd64.tar.zst
+          sudo packaging/qcow2/build-qcow2.sh \
+            build/rootfs \
+            build/warp-router-${VERSION}-amd64.qcow2
 
       - name: Generate checksums
         run: |
