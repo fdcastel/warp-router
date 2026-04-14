@@ -11,7 +11,7 @@ import (
 
 // TestLXCImageLifecycle boots a warp-router LXC container and verifies:
 // 1. All core services start (FRR, nftables, Kea, Unbound, SSH, networking)
-// 2. warp binary is present and runnable
+// 2. warp binary is present and runnable from default PATH
 // 3. /etc/warp directory exists
 // 4. SSH service is accessible
 func TestLXCImageLifecycle(t *testing.T) {
@@ -73,14 +73,14 @@ func TestLXCImageLifecycle(t *testing.T) {
 	})
 
 	t.Run("WarpBinaryPresent", func(t *testing.T) {
-		out, err := pve.ExecCT(vmid, "test -x /usr/local/bin/warp && echo ok")
+		out, err := pve.ExecCT(vmid, "test -x /usr/bin/warp && echo ok")
 		if err != nil || strings.TrimSpace(out) != "ok" {
 			t.Fatal("warp binary not found or not executable")
 		}
 	})
 
 	t.Run("WarpRunnable", func(t *testing.T) {
-		out, err := pve.ExecCT(vmid, "/usr/local/bin/warp status 2>&1")
+		out, err := pve.ExecCT(vmid, "warp status 2>&1")
 		if err != nil {
 			// exit 0 even without config is fine, but warp might exit non-zero
 			_ = out

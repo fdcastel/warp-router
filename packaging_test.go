@@ -68,6 +68,7 @@ func TestOverlayStructure(t *testing.T) {
 		"packaging/rootfs/overlay/etc/frr/frr.conf",
 		"packaging/rootfs/overlay/etc/nftables.conf",
 		"packaging/rootfs/overlay/etc/kea/kea-dhcp4.conf",
+		"packaging/rootfs/overlay/etc/systemd/system/kea-dhcp4-server.service.d/override.conf",
 		"packaging/rootfs/overlay/etc/unbound/unbound.conf.d/warp-router.conf",
 		"packaging/rootfs/overlay/etc/ssh/sshd_config.d/99-warp-router.conf",
 		"packaging/rootfs/overlay/etc/apt/apt.conf.d/20auto-upgrades",

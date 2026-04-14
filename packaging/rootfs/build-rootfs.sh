@@ -95,7 +95,11 @@ fi
 WARP_BIN="${SCRIPT_DIR}/../../build/warp"
 if [[ -f "$WARP_BIN" ]]; then
     echo "==> Installing warp binary"
-    install -m 0755 "$WARP_BIN" "${OUTPUT_DIR}/usr/local/bin/warp"
+    install -d -m 0755 "${OUTPUT_DIR}/usr/bin" "${OUTPUT_DIR}/usr/local/bin"
+    # Install in /usr/bin so non-login shells (e.g. pct exec/ssh command mode)
+    # can resolve `warp` with the default PATH.
+    install -m 0755 "$WARP_BIN" "${OUTPUT_DIR}/usr/bin/warp"
+    ln -sf /usr/bin/warp "${OUTPUT_DIR}/usr/local/bin/warp"
 else
     echo "==> WARNING: warp binary not found at ${WARP_BIN}, skipping installation"
 fi

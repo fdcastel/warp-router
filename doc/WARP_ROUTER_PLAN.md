@@ -144,7 +144,7 @@ specs/                         # Existing spec documents (unchanged)
 | 1.2 | ✅ | Create Makefile with build targets | Targets: `build`, `rootfs`, `lxc`, `qcow2`, `test`, `test-integration`, `clean`. Commit: ca581aa |
 | 1.3 | ✅ | Define package list for rootfs | Create `packaging/rootfs/packages.list`: `frr`, `kea-dhcp4-server`, `unbound`, `nftables`, `cloud-init`, `systemd`, `openssh-server`, `iproute2`, `curl`, `ca-certificates`, etc. Commit: fe275b0 |
 | 1.4 | ✅ | Write mmdebstrap rootfs build script | `packaging/rootfs/build-rootfs.sh`: produces a clean Debian 13 rootfs directory with all packages, timezone, locale, and SSH config. Must run as root or in a user namespace. Commit: 075bf30 |
-| 1.5 | ✅ | Create rootfs overlay files | `packaging/rootfs/overlay/`: default FRR daemons config (enable bgpd, staticd, bfdd, pbrd), sysctl for IP forwarding, nftables base ruleset, Kea skeleton config, Unbound skeleton config, SSH hardening. Commit: fb7cc53 |
+| 1.5 | ✅ | Create rootfs overlay files | `packaging/rootfs/overlay/`: default FRR daemons config (enable bgpd, staticd, bfdd, pbrd), sysctl for IP forwarding, nftables base ruleset, Kea skeleton config + Kea systemd override for unprivileged LXC, Unbound skeleton config, SSH hardening. Commit: fb7cc53 |
 | 1.6 | ✅ | Write mmdebstrap customize hooks | `packaging/rootfs/hooks/customize01-services.sh`: enable services, set UTC/locale, lock root password, create /etc/warp, clean APT, remove machine-id/SSH host keys. Commit: 2c9a2c1 |
 | 1.7 | ✅ | Validate rootfs locally | Structural validation via Go tests (packaging_test.go, 9 tests). Actual mmdebstrap build requires Debian host or privileged VM (seccomp blocks sockets in LXC chroot). Commit: 8a28f8e |
 
@@ -182,7 +182,7 @@ specs/                         # Existing spec documents (unchanged)
 | 3.9 | ✅ | Implement revision store | `internal/revision/`: file-based store with metadata, SHA256, current symlink. 8 tests. Commit: e55b80a |
 | 3.10 | ✅ | Implement rollback logic | Previous() + rollback command in CLI. Rollback creates new revision. Commit: e55b80a |
 | 3.11 | ✅ | Build `warp` CLI commands | `cmd/warp/`: validate, apply, rollback, revisions, status. Plain subcommands (no cobra). 7 CLI integration tests. Commit: dbe7a03 |
-| 3.12 | ✅ | Install `warp` binary into rootfs | build-rootfs.sh installs build/warp to /usr/local/bin/warp. Also added ifupdown + dns-root-data packages, fixed cloud-init service enablement. |
+| 3.12 | ✅ | Install `warp` binary into rootfs | build-rootfs.sh installs build/warp to `/usr/bin/warp` and keeps `/usr/local/bin/warp` as compatibility symlink. Also added ifupdown + dns-root-data packages, fixed cloud-init service enablement. |
 | 3.13 | ✅ | Add VLAN subinterface provisioning in apply pipeline | `internal/apply/`: `ProvisionVLANs()` creates VLAN devices (`ip link add ... type vlan`), sets interface UP, assigns static IPs, idempotent on repeated apply. Enables Phase 6.12. |
 | 3.14 | ✅ | Make revision IDs collision-safe | `internal/revision/store.go`: when multiple `Save()` calls happen within one second, append numeric suffix (`-01`, `-02`, ...). Fixes flaky rollback history tests under fast apply/rollback cycles. |
 

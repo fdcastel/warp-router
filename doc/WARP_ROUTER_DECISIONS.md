@@ -148,6 +148,14 @@
 **Decision**: Install and enable unattended security updates in the rootfs image (`unattended-upgrades` package plus apt policy overlays).  
 **Rationale**: Router appliances are long-running and frequently internet-exposed. Enabling periodic package index refresh and unattended security updates reduces patch latency without requiring interactive maintenance windows. Policy is restricted to Debian security origin patterns to avoid broad, unbounded package churn.
 
+### AD-018: Install `warp` in `/usr/bin` and keep `/usr/local/bin` symlink (2026-04-14)
+**Decision**: Install the `warp` binary to `/usr/bin/warp` during rootfs build, and create `/usr/local/bin/warp` as a compatibility symlink.  
+**Rationale**: Non-login shell contexts used by automation (`pct exec ... -- bash -c`, SSH command mode) may not include `/usr/local/bin` in `PATH`. Installing in `/usr/bin` makes `warp` resolvable consistently across Proxmox console, SSH interactive sessions, and command-mode execution while preserving backward compatibility for scripts that reference `/usr/local/bin/warp`.
+
+### AD-019: Override Kea unit lock directory for unprivileged LXC (2026-04-14)
+**Decision**: Ship a systemd override for `kea-dhcp4-server` that sets `KEA_LOCKFILE_DIR=/run/kea` and removes `lock/kea` from `RuntimeDirectory`.  
+**Rationale**: The Debian Kea unit defaults to a lock path under `/run/lock`, which introduces a hard dependency on `run-lock.mount`. In unprivileged LXC environments this mount can fail, preventing Kea from starting and causing `warp apply` to fail at the Kea reload step. Using `/run/kea` avoids the mount dependency while preserving Kea runtime lock semantics.
+
 ### LL-013: Revision IDs Collide Under Fast Apply/Rollback (2026-04-14)
 **Context**: Full integration suite intermittently failed `TestConfigRollback` expecting 3 revisions but finding 2.  
 **Problem**: Revision IDs were second-granularity timestamps (`YYYYMMDDTHHMMSSZ`). Multiple saves in the same second overwrote the same revision directory.  
@@ -162,3 +170,13 @@
 **Context**: Enabling `yaml.Decoder.KnownFields(true)` caused the integration compile/validation pass to surface stale test configs.  
 **Problem**: Some integration tests were still generating removed or unsupported fields (`weight`, `default_route`, ad-hoc health sections, old PBR expectations). Those configs had been tolerated only because unknown YAML keys were silently ignored.  
 **Resolution**: Keep strict parsing enabled and treat test-fixture updates as part of schema changes. The stricter parser caught real drift that would otherwise hide dead config fields.
+
+### LL-016: `warp` Missing in `pct exec`/SSH Command Mode Due to PATH (2026-04-14)
+**Context**: Operator could run `warp` in Proxmox web console but got "command not found" when entering the same container via `pct exec` and SSH command-mode sessions.  
+**Problem**: Image installed `warp` only in `/usr/local/bin`. Some command execution contexts used a restricted `PATH` without `/usr/local/bin`.  
+**Resolution**: Install `warp` in `/usr/bin` and keep `/usr/local/bin/warp` symlink for compatibility. Added integration lifecycle assertion using plain `warp status` (PATH lookup) to prevent regression.
+
+### LL-017: Kea Startup Blocked by `run-lock.mount` in Unprivileged LXC (2026-04-14)
+**Context**: README sample apply on CT 9100 failed at Kea reload, leaving no applied revision.  
+**Problem**: `kea-dhcp4-server.service` required `run-lock.mount` via `RuntimeDirectory=lock/kea`. In this unprivileged Proxmox LXC environment, `run-lock.mount` fails, so Kea never starts even with valid configuration.  
+**Resolution**: Added rootfs overlay drop-in `etc/systemd/system/kea-dhcp4-server.service.d/override.conf` to use `/run/kea` for locks and runtime directories, removing dependency on `/run/lock` mount.
